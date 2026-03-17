@@ -1,0 +1,3276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wildlife Explorer</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700;900&family=Cinzel:wght@400;600;700&family=Raleway:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  :root {
+    --gold: #c9a84c;
+    --gold-light: #f0d080;
+    --gold-glow: rgba(201,168,76,0.4);
+    --deep-green: #0a1a0f;
+    --forest-green: #0d2818;
+    --mid-green: #1a3d20;
+    --glass-bg: rgba(10,25,15,0.6);
+    --glass-border: rgba(201,168,76,0.2);
+    --text-light: #e8e0d0;
+    --text-muted: rgba(232,224,208,0.6);
+
+    /* Jungle palette from the illustration */
+    --jungle-bg: #1a2e14;
+    --jungle-deep: #0d1a08;
+    --jungle-mid: #2a4a1a;
+    --jungle-light: #4a7a30;
+    --jungle-pale: #7aaa55;
+    --jungle-tan: #8b6a3a;
+    --jungle-pink: #d4948a;
+    --jungle-blue: #7ab8c8;
+    --jungle-sky: #a8d4e0;
+    --jungle-earth: #8a7040;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--jungle-deep);
+    color: var(--text-light);
+    font-family: 'Raleway', sans-serif;
+    overflow-x: hidden;
+    cursor: none;
+  }
+
+  /* JUNGLE ILLUSTRATED BACKGROUND — persistent canvas layer */
+  #jungle-bg-canvas {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.18;
+  }
+
+  /* CUSTOM PAW CURSOR */
+  .cursor {
+    width: 38px; height: 38px;
+    position: fixed;
+    pointer-events: none;
+    z-index: 9999;
+    transform: translate(-6px, -4px);
+    transition: transform 0.08s, width 0.2s, height 0.2s, filter 0.2s;
+    filter: drop-shadow(0 0 6px rgba(201,168,76,0.8));
+  }
+  .cursor svg { width: 100%; height: 100%; }
+  .cursor-ring {
+    width: 52px; height: 52px;
+    border: 1px solid rgba(201,168,76,0.4);
+    border-radius: 50%;
+    position: fixed;
+    pointer-events: none;
+    z-index: 9998;
+    transform: translate(-50%,-50%);
+    transition: transform 0.15s ease-out, width 0.3s, height 0.3s, opacity 0.3s;
+    opacity: 0.4;
+    background: radial-gradient(circle, rgba(201,168,76,0.04) 0%, transparent 70%);
+  }
+  .cursor.big { width: 52px; height: 52px; filter: drop-shadow(0 0 12px rgba(201,168,76,1)); }
+  .cursor-ring.big { width: 68px; height: 68px; opacity: 0.6; }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--jungle-deep, #0d1a08); }
+  ::-webkit-scrollbar-thumb { background: var(--gold); border-radius: 2px; }
+
+  /* NAV */
+  nav {
+    position: fixed; top:0; left:0; right:0;
+    z-index: 100;
+    padding: 20px 60px;
+    display: flex; align-items: center; justify-content: space-between;
+    background: linear-gradient(to bottom, rgba(6,14,4,0.92), transparent);
+    backdrop-filter: blur(2px);
+  }
+  .nav-logo {
+    font-family: 'Cinzel', serif;
+    font-size: 1.1rem;
+    letter-spacing: 0.3em;
+    color: var(--gold);
+    text-transform: uppercase;
+  }
+  .nav-links { display: flex; gap: 40px; list-style: none; }
+  .nav-links a {
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.75rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: color 0.3s;
+  }
+  .nav-links a:hover { color: var(--gold); }
+
+  /* ==================== SECTION 1: HERO ==================== */
+  #hero {
+    width: 100vw; height: 100vh;
+    position: relative;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+  }
+
+  .hero-bg {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse 80% 60% at 50% 40%, rgba(42,74,26,0.8) 0%, transparent 70%),
+      radial-gradient(ellipse 40% 80% at 20% 50%, rgba(26,60,15,0.6) 0%, transparent 60%),
+      radial-gradient(ellipse 40% 80% at 80% 50%, rgba(26,60,15,0.6) 0%, transparent 60%),
+      linear-gradient(180deg, #060e04 0%, #0d1a08 30%, #0a1506 70%, #060e04 100%);
+  }
+
+  /* Illustrated jungle scene overlay on hero */
+  .jungle-illustration {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .jungle-illustration svg {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Animated forest silhouette */
+  .forest-layer {
+    position: absolute;
+    bottom: 0; left: -5%; right: -5%;
+    height: 45%;
+    pointer-events: none;
+  }
+  .forest-layer svg { width: 110%; height: 100%; }
+
+  .forest-front { bottom: 0; opacity: 1; filter: drop-shadow(0 -10px 30px rgba(20,80,30,0.3)); }
+  .forest-mid { bottom: 5%; opacity: 0.7; filter: drop-shadow(0 -5px 20px rgba(15,60,20,0.2)); animation: sway 8s ease-in-out infinite; }
+  .forest-back { bottom: 10%; opacity: 0.4; animation: sway 12s ease-in-out infinite reverse; }
+
+  @keyframes sway {
+    0%,100% { transform: translateX(0); }
+    50% { transform: translateX(-1%); }
+  }
+
+  /* Rays of light */
+  .light-rays {
+    position: absolute; inset: 0;
+    background:
+      conic-gradient(from 260deg at 50% -20%, transparent 0deg, rgba(201,168,76,0.03) 10deg, transparent 20deg,
+        transparent 40deg, rgba(201,168,76,0.025) 50deg, transparent 60deg,
+        transparent 80deg, rgba(201,168,76,0.02) 90deg, transparent 100deg),
+      radial-gradient(ellipse 60% 40% at 50% 0%, rgba(201,168,76,0.08) 0%, transparent 70%);
+    animation: rays-pulse 6s ease-in-out infinite;
+  }
+  @keyframes rays-pulse {
+    0%,100% { opacity: 0.7; }
+    50% { opacity: 1; }
+  }
+
+  /* Floating particles */
+  .particles { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+  .particle {
+    position: absolute;
+    width: 3px; height: 3px;
+    background: var(--gold);
+    border-radius: 50%;
+    opacity: 0;
+    animation: float-particle var(--dur, 8s) var(--delay, 0s) ease-in-out infinite;
+  }
+  @keyframes float-particle {
+    0% { transform: translateY(100vh) translateX(0) rotate(0deg); opacity: 0; }
+    10% { opacity: 0.6; }
+    90% { opacity: 0.3; }
+    100% { transform: translateY(-20vh) translateX(var(--drift, 50px)) rotate(360deg); opacity: 0; }
+  }
+
+  /* Hero text */
+  .hero-content { position: relative; z-index: 5; text-align: center; }
+
+  .hero-eyebrow {
+    font-family: 'Cinzel', serif;
+    font-size: 0.7rem;
+    letter-spacing: 0.6em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 20px;
+    opacity: 0;
+    animation: fade-up 1s 0.5s forwards;
+  }
+
+  .hero-title {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: clamp(3.5rem, 9vw, 8rem);
+    font-weight: 900;
+    line-height: 0.95;
+    letter-spacing: -0.01em;
+    background: linear-gradient(135deg, #f0d080 0%, #c9a84c 30%, #fff8e0 50%, #c9a84c 70%, #a07830 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: drop-shadow(0 0 40px rgba(201,168,76,0.4));
+    opacity: 0;
+    animation: title-reveal 1.2s 0.8s cubic-bezier(0.16,1,0.3,1) forwards;
+    text-shadow: none;
+    position: relative;
+  }
+
+  @keyframes title-reveal {
+    from { opacity: 0; transform: translateY(30px) scale(0.95); filter: drop-shadow(0 0 0px rgba(201,168,76,0)); }
+    to { opacity: 1; transform: translateY(0) scale(1); filter: drop-shadow(0 0 40px rgba(201,168,76,0.4)); }
+  }
+
+  .hero-subtitle {
+    margin-top: 24px;
+    font-family: 'Raleway', sans-serif;
+    font-size: clamp(1rem, 2.5vw, 1.4rem);
+    font-weight: 300;
+    letter-spacing: 0.15em;
+    background: linear-gradient(90deg, #7ab87a, #c9a84c, #7ab87a, #c9a84c);
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: gradient-shift 4s linear infinite, fade-up 1s 1.2s forwards;
+    opacity: 0;
+  }
+
+  @keyframes gradient-shift {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 300% 50%; }
+  }
+
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .hero-divider {
+    width: 100px; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    margin: 28px auto;
+    opacity: 0;
+    animation: fade-up 1s 1.4s forwards;
+  }
+
+  .hero-cta {
+    display: inline-flex; align-items: center; gap: 12px;
+    padding: 14px 36px;
+    border: 1px solid var(--gold);
+    color: var(--gold);
+    font-family: 'Cinzel', serif;
+    font-size: 0.75rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    text-decoration: none;
+    background: rgba(201,168,76,0.05);
+    backdrop-filter: blur(10px);
+    transition: all 0.4s;
+    opacity: 0;
+    animation: fade-up 1s 1.6s forwards;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero-cta::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(201,168,76,0.1), transparent);
+    transform: translateX(-100%);
+    transition: transform 0.6s;
+  }
+  .hero-cta:hover::before { transform: translateX(100%); }
+  .hero-cta:hover {
+    background: rgba(201,168,76,0.12);
+    box-shadow: 0 0 30px rgba(201,168,76,0.3), inset 0 0 30px rgba(201,168,76,0.05);
+    transform: translateY(-2px);
+  }
+
+  /* Scroll indicator */
+  .scroll-indicator {
+    position: absolute; bottom: 40px; left: 50%;
+    transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    opacity: 0;
+    animation: fade-up 1s 2s forwards;
+  }
+  .scroll-indicator span {
+    font-size: 0.6rem; letter-spacing: 0.4em; text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .scroll-mouse {
+    width: 22px; height: 36px;
+    border: 1px solid rgba(201,168,76,0.4);
+    border-radius: 11px;
+    position: relative;
+    display: flex; justify-content: center;
+  }
+  .scroll-wheel {
+    width: 3px; height: 8px;
+    background: var(--gold);
+    border-radius: 2px;
+    margin-top: 5px;
+    animation: scroll-anim 2s ease-in-out infinite;
+  }
+  @keyframes scroll-anim {
+    0% { transform: translateY(0); opacity: 1; }
+    100% { transform: translateY(12px); opacity: 0; }
+  }
+
+  /* ==================== SECTION STYLES ==================== */
+  section {
+    min-height: 100vh;
+    padding: 100px 60px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .section-header {
+    text-align: center;
+    margin-bottom: 70px;
+  }
+  .section-label {
+    font-family: 'Cinzel', serif;
+    font-size: 0.65rem;
+    letter-spacing: 0.5em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 16px;
+    display: block;
+  }
+  .section-title {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: clamp(2rem, 4vw, 3.2rem);
+    font-weight: 700;
+    color: var(--text-light);
+    line-height: 1.1;
+  }
+  .section-title span { color: var(--gold); }
+  .section-line {
+    width: 80px; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    margin: 20px auto 0;
+  }
+
+  /* ==================== SECTION 2: CIRCULAR ANIMALS ==================== */
+  #animals {
+    background:
+      radial-gradient(ellipse 100% 80% at 50% 50%, rgba(42,74,26,0.6) 0%, var(--jungle-deep) 70%);
+    position: relative;
+  }
+  #animals::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      radial-gradient(ellipse 20% 30% at 10% 20%, rgba(122,168,85,0.08) 0%, transparent 100%),
+      radial-gradient(ellipse 15% 25% at 90% 70%, rgba(122,184,200,0.06) 0%, transparent 100%);
+    pointer-events: none;
+  }
+
+  .orbit-container {
+    position: relative;
+    width: min(600px, 90vw);
+    height: min(600px, 90vw);
+    margin: 0 auto;
+  }
+
+  .orbit-center {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .orbit-center-ring {
+    width: 130px; height: 130px;
+    border: 1px solid rgba(201,168,76,0.3);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(circle, rgba(201,168,76,0.1) 0%, transparent 70%);
+    box-shadow: 0 0 40px rgba(201,168,76,0.15), inset 0 0 40px rgba(201,168,76,0.05);
+    animation: pulse-ring 3s ease-in-out infinite;
+  }
+  @keyframes pulse-ring {
+    0%,100% { box-shadow: 0 0 40px rgba(201,168,76,0.15), inset 0 0 40px rgba(201,168,76,0.05); }
+    50% { box-shadow: 0 0 60px rgba(201,168,76,0.25), inset 0 0 60px rgba(201,168,76,0.1); }
+  }
+  .orbit-center-text {
+    font-family: 'Cinzel', serif;
+    font-size: 0.65rem;
+    letter-spacing: 0.3em;
+    text-align: center;
+    color: var(--gold);
+    text-transform: uppercase;
+    line-height: 1.6;
+  }
+
+  .orbit-path {
+    position: absolute; inset: 0;
+    border: 1px dashed rgba(201,168,76,0.1);
+    border-radius: 50%;
+    animation: orbit-spin 60s linear infinite;
+  }
+  @keyframes orbit-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  .animal-node {
+    position: absolute;
+    width: 90px; height: 90px;
+    transform-origin: center center;
+    cursor: pointer;
+  }
+  .animal-node-inner {
+    width: 100%; height: 100%;
+    border-radius: 50%;
+    background: var(--glass-bg);
+    border: 1px solid rgba(201,168,76,0.25);
+    backdrop-filter: blur(10px);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 4px;
+    transition: all 0.4s;
+    position: relative;
+    overflow: hidden;
+  }
+  .animal-node-inner::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(circle at 50% 0%, rgba(201,168,76,0.15) 0%, transparent 70%);
+    opacity: 0;
+    transition: opacity 0.4s;
+  }
+  .animal-node:hover .animal-node-inner {
+    border-color: var(--gold);
+    box-shadow: 0 0 30px rgba(201,168,76,0.5), inset 0 0 20px rgba(201,168,76,0.1);
+    transform: scale(1.12);
+  }
+  .animal-node:hover .animal-node-inner::before { opacity: 1; }
+  .animal-emoji { font-size: 2rem; }
+  .animal-label {
+    font-family: 'Cinzel', serif;
+    font-size: 0.55rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--gold);
+  }
+
+  /* Info Panel */
+  .info-panel {
+    position: fixed; top: 50%; right: 40px;
+    transform: translateY(-50%) translateX(120%);
+    width: 300px;
+    background: rgba(8,20,10,0.95);
+    border: 1px solid rgba(201,168,76,0.3);
+    backdrop-filter: blur(20px);
+    padding: 30px;
+    z-index: 500;
+    transition: transform 0.5s cubic-bezier(0.16,1,0.3,1);
+    box-shadow: -10px 0 60px rgba(0,0,0,0.5), 0 0 40px rgba(201,168,76,0.1);
+  }
+  .info-panel.open { transform: translateY(-50%) translateX(0); }
+  .info-panel-close {
+    position: absolute; top: 16px; right: 16px;
+    background: none; border: none; color: var(--gold);
+    font-size: 1.2rem; cursor: pointer; opacity: 0.7;
+    transition: opacity 0.2s;
+  }
+  .info-panel-close:hover { opacity: 1; }
+  .info-panel-emoji { font-size: 3rem; margin-bottom: 12px; }
+  .info-panel-name {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 1.3rem;
+    color: var(--gold);
+    margin-bottom: 8px;
+  }
+  .info-panel-status {
+    display: inline-block;
+    padding: 3px 10px;
+    border: 1px solid currentColor;
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    border-radius: 20px;
+  }
+  .status-endangered { color: #ff6b4a; }
+  .status-vulnerable { color: #ffaa44; }
+  .status-lc { color: #66cc88; }
+  .info-panel-desc {
+    font-size: 0.8rem;
+    line-height: 1.7;
+    color: var(--text-muted);
+  }
+  .info-panel-stat {
+    display: flex; justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(201,168,76,0.1);
+    font-size: 0.75rem;
+  }
+  .info-panel-stat-key { color: var(--text-muted); }
+  .info-panel-stat-val { color: var(--gold); font-weight: 600; }
+
+  /* ==================== SECTION 3: TIMELINE ==================== */
+  #timeline {
+    background: linear-gradient(180deg, var(--jungle-deep) 0%, #060e04 50%, var(--jungle-deep) 100%);
+    position: relative;
+  }
+
+  .timeline-container {
+    max-width: 800px;
+    margin: 0 auto;
+    position: relative;
+    padding: 40px 0;
+  }
+
+  .timeline-spine {
+    position: absolute;
+    left: 50%;
+    top: 0; bottom: 0;
+    width: 1px;
+    background: rgba(201,168,76,0.15);
+    transform: translateX(-50%);
+    overflow: hidden;
+  }
+  .timeline-progress {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 0%;
+    background: linear-gradient(180deg, var(--gold), rgba(201,168,76,0.3));
+    transition: height 0.1s;
+    box-shadow: 0 0 10px rgba(201,168,76,0.5);
+  }
+
+  .timeline-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 60px;
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.7s, transform 0.7s;
+  }
+  .timeline-item.visible { opacity: 1; transform: translateY(0); }
+  .timeline-item:nth-child(even) { flex-direction: row-reverse; }
+
+  .timeline-card {
+    width: calc(50% - 50px);
+    background: rgba(10,25,15,0.8);
+    border: 1px solid rgba(201,168,76,0.2);
+    backdrop-filter: blur(15px);
+    padding: 24px 28px;
+    position: relative;
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+  .timeline-card:hover {
+    border-color: rgba(201,168,76,0.5);
+    box-shadow: 0 0 30px rgba(201,168,76,0.1);
+  }
+  .timeline-year {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 2.5rem;
+    font-weight: 900;
+    color: var(--gold);
+    opacity: 0.3;
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+  .timeline-event-title {
+    font-family: 'Cinzel', serif;
+    font-size: 1rem;
+    color: var(--text-light);
+    margin-bottom: 8px;
+  }
+  .timeline-event-desc {
+    font-size: 0.8rem;
+    line-height: 1.7;
+    color: var(--text-muted);
+  }
+  .timeline-dot {
+    width: 14px; height: 14px;
+    background: var(--gold);
+    border-radius: 50%;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    box-shadow: 0 0 20px rgba(201,168,76,0.7);
+    flex-shrink: 0;
+    z-index: 2;
+  }
+  .timeline-item { position: relative; }
+  .timeline-item .timeline-dot {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  /* ==================== SECTION 4: CARDS GRID ==================== */
+  #cards {
+    background:
+      radial-gradient(ellipse 120% 60% at 50% 100%, rgba(74,122,48,0.3) 0%, var(--jungle-deep) 70%);
+    position: relative;
+  }
+
+  /* ===== DAY / NIGHT TOGGLE ===== */
+  .daynight-toggle-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 48px;
+  }
+  .daynight-toggle-label {
+    font-family: 'Cinzel', serif;
+    font-size: 0.75rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    transition: color 0.3s;
+  }
+  .daynight-toggle-label.active { color: var(--gold); }
+
+  .toggle-track {
+    width: 72px; height: 34px;
+    background: rgba(10,25,15,0.8);
+    border: 1px solid rgba(201,168,76,0.3);
+    border-radius: 17px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.5s, border-color 0.3s;
+    overflow: hidden;
+  }
+  .toggle-track.day-mode {
+    background: linear-gradient(135deg, rgba(255,200,60,0.25), rgba(255,140,30,0.15));
+    border-color: rgba(255,200,60,0.5);
+  }
+  .toggle-track.night-mode {
+    background: linear-gradient(135deg, rgba(30,40,80,0.8), rgba(10,20,50,0.8));
+    border-color: rgba(100,130,220,0.5);
+  }
+
+  .toggle-knob {
+    position: absolute;
+    top: 4px; left: 4px;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--gold);
+    transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1), background 0.4s;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.9rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  }
+  .toggle-track.night-mode .toggle-knob {
+    transform: translateX(38px);
+    background: #c8d8f8;
+  }
+
+  /* Day mode: cards section gets a warm light tint */
+  #cards.day-mode-active {
+    background:
+      radial-gradient(ellipse 120% 60% at 50% 100%, rgba(160,180,80,0.18) 0%, rgba(14,28,8,0.98) 70%);
+  }
+  #cards.day-mode-active::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 200px;
+    background: linear-gradient(180deg, rgba(255,200,80,0.06) 0%, transparent 100%);
+    pointer-events: none;
+  }
+
+  /* Day/Night label indicator */
+  .mode-indicator {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 18px;
+    border-radius: 20px;
+    font-family: 'Cinzel', serif;
+    font-size: 0.7rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    margin-bottom: 32px;
+    transition: all 0.5s;
+    border: 1px solid rgba(201,168,76,0.3);
+    color: var(--gold);
+    background: rgba(201,168,76,0.06);
+  }
+  .mode-indicator.day {
+    border-color: rgba(255,200,60,0.4);
+    color: #ffcc44;
+    background: rgba(255,200,60,0.08);
+  }
+  .mode-indicator.night {
+    border-color: rgba(100,130,220,0.4);
+    color: #8899dd;
+    background: rgba(100,130,220,0.08);
+  }
+
+  /* ===== IMPROVED ANIMAL CARDS with illustrated animals ===== */
+  .animal-card {
+    background: linear-gradient(135deg, rgba(22,48,28,0.85) 0%, rgba(12,28,16,0.95) 100%);
+    border: 1px solid rgba(201,168,76,0.18);
+    backdrop-filter: blur(15px);
+    padding: 32px;
+    cursor: pointer;
+    transition: all 0.4s cubic-bezier(0.16,1,0.3,1);
+    position: relative;
+    overflow: hidden;
+    transform-style: preserve-3d;
+  }
+  .animal-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, transparent 60%, rgba(12,28,16,0.7) 100%);
+    pointer-events: none;
+  }
+  .animal-card.day-card {
+    background: linear-gradient(135deg, rgba(40,65,20,0.85) 0%, rgba(22,42,12,0.92) 100%);
+  }
+  .animal-card.night-card {
+    background: linear-gradient(135deg, rgba(12,18,38,0.9) 0%, rgba(8,12,28,0.95) 100%);
+  }
+  /* Animal illustration container */
+  .card-illustration {
+    width: 100%;
+    height: 140px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .card-illustration svg {
+    width: 120px;
+    height: 120px;
+    filter: drop-shadow(0 4px 20px rgba(0,0,0,0.5));
+    transition: transform 0.4s;
+  }
+  .animal-card:hover .card-illustration svg { transform: scale(1.08) translateY(-4px); }
+  .card-illustration-bg {
+    position: absolute;
+    inset: 0;
+    border-radius: 8px;
+  }
+
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 24px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  .animal-card {
+    background: linear-gradient(135deg, rgba(15,35,20,0.8) 0%, rgba(8,20,12,0.9) 100%);
+    border: 1px solid rgba(201,168,76,0.15);
+    backdrop-filter: blur(15px);
+    padding: 32px;
+    cursor: pointer;
+    transition: all 0.4s cubic-bezier(0.16,1,0.3,1);
+    position: relative;
+    overflow: hidden;
+    transform-style: preserve-3d;
+  }
+  .animal-card::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(201,168,76,0.08) 0%, transparent 60%);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .animal-card:hover::before { opacity: 1; }
+  .animal-card:hover {
+    border-color: rgba(201,168,76,0.4);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 40px rgba(201,168,76,0.1);
+    transform: translateY(-8px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  }
+  .card-icon {
+    font-size: 3.5rem;
+    margin-bottom: 16px;
+    display: block;
+    transition: transform 0.4s;
+    display: none; /* replaced by illustration */
+  }
+  .animal-card:hover .card-icon { transform: scale(1.1) translateY(-4px); }
+  .card-title {
+    font-family: 'Cinzel', serif;
+    font-size: 1.2rem;
+    color: var(--text-light);
+    margin-bottom: 8px;
+  }
+  .card-habitat {
+    font-size: 0.7rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 12px;
+  }
+  .card-desc {
+    font-size: 0.8rem;
+    line-height: 1.7;
+    color: var(--text-muted);
+  }
+  .card-arrow {
+    position: absolute;
+    bottom: 24px; right: 24px;
+    color: var(--gold);
+    opacity: 0;
+    transform: translateX(-10px);
+    transition: all 0.4s;
+    font-size: 1.2rem;
+  }
+  .animal-card:hover .card-arrow { opacity: 1; transform: translateX(0); }
+  .card-status-badge {
+    position: absolute;
+    top: 20px; right: 20px;
+    padding: 4px 10px;
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    border-radius: 20px;
+    border: 1px solid currentColor;
+  }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(2,8,4,0.9);
+    backdrop-filter: blur(10px);
+    z-index: 1000;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.4s;
+  }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+  .modal {
+    width: min(600px, 90vw);
+    background: linear-gradient(135deg, rgba(12,28,16,0.97), rgba(6,15,8,0.97));
+    border: 1px solid rgba(201,168,76,0.3);
+    backdrop-filter: blur(20px);
+    padding: 48px;
+    position: relative;
+    transform: scale(0.9) translateY(30px);
+    transition: transform 0.5s cubic-bezier(0.16,1,0.3,1);
+    box-shadow: 0 40px 120px rgba(0,0,0,0.8), 0 0 60px rgba(201,168,76,0.1);
+  }
+  .modal-overlay.open .modal { transform: scale(1) translateY(0); }
+  .modal-close {
+    position: absolute; top: 20px; right: 20px;
+    background: none; border: 1px solid rgba(201,168,76,0.3);
+    color: var(--gold); font-size: 1rem; cursor: pointer;
+    width: 36px; height: 36px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.3s;
+  }
+  .modal-close:hover { background: rgba(201,168,76,0.1); border-color: var(--gold); }
+  .modal-icon { font-size: 4rem; margin-bottom: 20px; }
+  .modal-title {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 2rem; color: var(--gold); margin-bottom: 8px;
+  }
+  .modal-subtitle {
+    font-size: 0.75rem; letter-spacing: 0.3em; text-transform: uppercase;
+    color: var(--text-muted); margin-bottom: 24px;
+  }
+  .modal-body { font-size: 0.9rem; line-height: 1.8; color: var(--text-muted); margin-bottom: 24px; }
+  .modal-stats {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .modal-stat {
+    background: rgba(201,168,76,0.05);
+    border: 1px solid rgba(201,168,76,0.15);
+    padding: 14px 16px;
+  }
+  .modal-stat-key { font-size: 0.65rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; }
+  .modal-stat-val { font-family: 'Cinzel', serif; font-size: 1rem; color: var(--gold); }
+
+  /* ==================== SECTION 5: 3D CUBE ==================== */
+  #habitat {
+    background: var(--jungle-deep);
+    display: flex; flex-direction: column; align-items: center;
+  }
+
+  .cube-scene {
+    perspective: 800px;
+    width: 260px; height: 260px;
+    margin: 40px auto 60px;
+    cursor: pointer;
+  }
+
+  .cube {
+    width: 260px; height: 260px;
+    position: relative;
+    transform-style: preserve-3d;
+    animation: cube-spin 12s linear infinite;
+    transition: animation-play-state 0.3s;
+  }
+  .cube.paused { animation-play-state: paused; }
+
+  @keyframes cube-spin {
+    from { transform: rotateX(-20deg) rotateY(0deg); }
+    to { transform: rotateX(-20deg) rotateY(360deg); }
+  }
+
+  .cube-face {
+    position: absolute;
+    width: 260px; height: 260px;
+    background: rgba(10,25,15,0.9);
+    border: 1px solid rgba(201,168,76,0.3);
+    backdrop-filter: blur(10px);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 10px;
+    font-family: 'Cinzel', serif;
+    font-size: 1rem;
+    letter-spacing: 0.15em;
+    color: var(--gold);
+    text-transform: uppercase;
+    transition: box-shadow 0.3s;
+    overflow: hidden;
+  }
+  .cube-face::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(circle at 50% 30%, rgba(201,168,76,0.12) 0%, transparent 70%);
+  }
+  .cube-face:hover { box-shadow: inset 0 0 40px rgba(201,168,76,0.15); }
+  .cube-face-icon { font-size: 3rem; position: relative; z-index: 1; }
+  .cube-face-label { position: relative; z-index: 1; }
+
+  .face-front { transform: translateZ(130px); }
+  .face-back { transform: rotateY(180deg) translateZ(130px); }
+  .face-right { transform: rotateY(90deg) translateZ(130px); }
+  .face-left { transform: rotateY(-90deg) translateZ(130px); }
+  .face-top { transform: rotateX(90deg) translateZ(130px); }
+  .face-bottom { transform: rotateX(-90deg) translateZ(130px); }
+
+  .habitat-info {
+    text-align: center;
+    max-width: 500px;
+    margin: 0 auto;
+    min-height: 80px;
+  }
+  .habitat-name {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 1.6rem;
+    color: var(--gold);
+    margin-bottom: 8px;
+  }
+  .habitat-desc { font-size: 0.85rem; line-height: 1.7; color: var(--text-muted); }
+
+  /* ==================== SECTION 6: GALLERY ==================== */
+  #gallery {
+    background: var(--jungle-deep);
+    padding: 100px 0;
+  }
+
+  .gallery-container {
+    position: relative;
+    max-width: 1000px;
+    margin: 0 auto;
+    overflow: hidden;
+  }
+
+  .gallery-track {
+    display: flex;
+    transition: transform 0.8s cubic-bezier(0.16,1,0.3,1);
+  }
+
+  .gallery-slide {
+    min-width: 100%;
+    height: 500px;
+    background: var(--forest-green);
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .gallery-slide-bg {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12rem;
+    opacity: 0.15;
+    filter: blur(2px);
+  }
+
+  .gallery-slide-content {
+    position: relative; z-index: 2;
+    text-align: center;
+    padding: 40px;
+  }
+  .gallery-slide-icon { font-size: 6rem; margin-bottom: 20px; filter: drop-shadow(0 0 20px rgba(201,168,76,0.3)); }
+  .gallery-slide-title {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 2rem;
+    color: var(--text-light);
+    margin-bottom: 12px;
+  }
+  .gallery-slide-sub { font-size: 0.85rem; color: var(--text-muted); letter-spacing: 0.15em; }
+
+  .gallery-overlay {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(3,13,5,0.6) 0%, transparent 30%, transparent 70%, rgba(3,13,5,0.6) 100%);
+    pointer-events: none;
+  }
+
+  .gallery-nav {
+    position: absolute; top: 50%;
+    transform: translateY(-50%);
+    background: rgba(10,25,15,0.8);
+    border: 1px solid rgba(201,168,76,0.3);
+    color: var(--gold);
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-size: 1.2rem;
+    z-index: 10;
+  }
+  .gallery-nav:hover { background: rgba(201,168,76,0.15); border-color: var(--gold); box-shadow: 0 0 20px rgba(201,168,76,0.3); }
+  .gallery-prev { left: 20px; }
+  .gallery-next { right: 20px; }
+
+  .gallery-dots {
+    display: flex; justify-content: center; gap: 8px;
+    margin-top: 24px;
+  }
+  .gallery-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: rgba(201,168,76,0.3);
+    cursor: pointer;
+    transition: all 0.3s;
+  }
+  .gallery-dot.active { background: var(--gold); width: 20px; border-radius: 3px; }
+
+  /* ==================== SECTION 7: ATMOSPHERIC ==================== */
+  #atmospheric {
+    min-height: 60vh;
+    background: linear-gradient(180deg, var(--jungle-deep) 0%, #060e04 50%, var(--jungle-deep) 100%);
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .leaves-container { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+  .leaf {
+    position: absolute;
+    font-size: var(--size, 1.5rem);
+    opacity: 0;
+    animation: leaf-fall var(--dur, 10s) var(--delay, 0s) ease-in-out infinite;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+    top: -50px;
+  }
+  @keyframes leaf-fall {
+    0% { transform: translateY(-50px) translateX(0) rotate(0deg); opacity: 0; }
+    10% { opacity: 0.7; }
+    90% { opacity: 0.3; }
+    100% {
+      transform: translateY(calc(100vh + 50px)) translateX(var(--drift, 100px)) rotate(var(--rot, 360deg));
+      opacity: 0;
+    }
+  }
+
+  .parallax-layers {
+    position: absolute; inset: 0;
+  }
+  .parallax-layer {
+    position: absolute; bottom: 0;
+    width: 110%;
+    left: -5%;
+    pointer-events: none;
+  }
+  .parallax-1 { height: 40%; opacity: 0.6; background: linear-gradient(0deg, #0a1e0d 0%, transparent 100%); }
+  .parallax-2 { height: 30%; opacity: 0.4; background: linear-gradient(0deg, #071510 0%, transparent 100%); }
+
+  .atmospheric-quote {
+    position: relative; z-index: 5;
+    text-align: center;
+    max-width: 700px;
+    padding: 40px;
+  }
+  .atmospheric-quote blockquote {
+    font-family: 'Cinzel', serif;
+    font-size: clamp(1.2rem, 3vw, 2rem);
+    line-height: 1.5;
+    color: var(--text-light);
+    font-style: italic;
+    margin-bottom: 20px;
+  }
+  .atmospheric-quote cite {
+    font-size: 0.75rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--gold);
+  }
+  .glow-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    pointer-events: none;
+  }
+  .glow-orb-1 {
+    width: 300px; height: 300px;
+    background: radial-gradient(circle, rgba(20,80,30,0.4) 0%, transparent 70%);
+    top: 20%; left: 10%;
+    animation: orb-float 8s ease-in-out infinite;
+  }
+  .glow-orb-2 {
+    width: 200px; height: 200px;
+    background: radial-gradient(circle, rgba(201,168,76,0.15) 0%, transparent 70%);
+    bottom: 20%; right: 15%;
+    animation: orb-float 10s ease-in-out infinite reverse;
+  }
+  @keyframes orb-float {
+    0%,100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-30px) scale(1.1); }
+  }
+
+  /* ==================== SECTION 8: GLOBE ==================== */
+  #globe-section {
+    background: radial-gradient(ellipse 100% 80% at 50% 50%, rgba(16,42,20,0.85) 0%, var(--jungle-deep) 80%);
+    display: flex; flex-direction: column; align-items: center;
+    padding: 100px 40px;
+  }
+
+  .globe-wrapper {
+    display: flex;
+    gap: 40px;
+    align-items: flex-start;
+    width: 100%;
+    max-width: 1200px;
+    margin-top: 40px;
+  }
+
+  .globe-canvas-container {
+    position: relative;
+    flex: 1;
+    min-height: 500px;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  #globe-canvas {
+    border-radius: 50%;
+    box-shadow:
+      0 0 80px rgba(201,168,76,0.15),
+      0 0 160px rgba(20,80,30,0.2),
+      inset 0 0 80px rgba(0,0,0,0.5);
+  }
+
+  .globe-atmosphere {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    animation: atmo-pulse 4s ease-in-out infinite;
+  }
+  @keyframes atmo-pulse {
+    0%,100% { opacity: 0.6; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.02); }
+  }
+
+  .globe-sidebar {
+    width: 280px;
+    flex-shrink: 0;
+  }
+
+  .animal-selector {
+    background: rgba(10,25,15,0.8);
+    border: 1px solid rgba(201,168,76,0.2);
+    backdrop-filter: blur(15px);
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  .animal-selector-title {
+    font-family: 'Cinzel', serif;
+    font-size: 0.7rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 16px;
+  }
+  .animal-btn {
+    width: 100%;
+    background: rgba(201,168,76,0.05);
+    border: 1px solid rgba(201,168,76,0.15);
+    color: var(--text-light);
+    padding: 10px 16px;
+    margin-bottom: 8px;
+    display: flex; align-items: center; gap: 10px;
+    cursor: pointer;
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.85rem;
+    transition: all 0.3s;
+    text-align: left;
+  }
+  .animal-btn:hover, .animal-btn.active {
+    background: rgba(201,168,76,0.12);
+    border-color: var(--gold);
+    color: var(--gold);
+  }
+  .animal-btn .btn-emoji { font-size: 1.2rem; }
+
+  .country-cards {
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .country-card {
+    background: rgba(10,25,15,0.8);
+    border: 1px solid rgba(201,168,76,0.15);
+    backdrop-filter: blur(10px);
+    padding: 14px 16px;
+    transition: all 0.3s;
+    opacity: 0;
+    transform: translateX(20px);
+    animation: slide-in 0.4s forwards;
+  }
+  @keyframes slide-in {
+    to { opacity: 1; transform: translateX(0); }
+  }
+  .country-card:hover { border-color: rgba(201,168,76,0.4); }
+  .country-card-top {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 6px;
+  }
+  .country-name {
+    font-family: 'Cinzel', serif;
+    font-size: 0.85rem;
+    color: var(--text-light);
+  }
+  .country-rank {
+    font-size: 0.65rem; font-family: 'Cinzel', serif;
+    color: var(--gold);
+    background: rgba(201,168,76,0.1);
+    border: 1px solid rgba(201,168,76,0.2);
+    padding: 2px 6px;
+  }
+  .country-population {
+    font-size: 0.75rem;
+    color: var(--gold);
+    margin-bottom: 4px;
+  }
+  .country-status {
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  /* Footer */
+  footer {
+    padding: 40px 60px;
+    border-top: 1px solid rgba(201,168,76,0.1);
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+  footer .footer-brand {
+    font-family: 'Cinzel', serif;
+    color: var(--gold);
+    letter-spacing: 0.2em;
+  }
+
+  /* RESPONSIVE */
+  @media (max-width: 768px) {
+    nav { padding: 16px 24px; }
+    .nav-links { display: none; }
+    section { padding: 80px 24px; }
+    .globe-wrapper { flex-direction: column; }
+    .globe-sidebar { width: 100%; }
+    .timeline-item, .timeline-item:nth-child(even) { flex-direction: column; }
+    .timeline-card { width: 80%; }
+    .timeline-dot { position: relative; left: auto; transform: none; }
+  }
+
+  /* Scroll fade in */
+  .scroll-reveal {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.8s ease, transform 0.8s ease;
+  }
+  .scroll-reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+</style>
+</head>
+<body>
+
+<!-- Jungle illustrated background canvas -->
+<canvas id="jungle-bg-canvas"></canvas>
+
+<!-- Custom paw cursor -->
+<div class="cursor" id="cursor">
+  <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" fill="none">
+    <!-- Main pad -->
+    <ellipse cx="32" cy="44" rx="14" ry="11" fill="#c9a84c" opacity="0.95"/>
+    <!-- Top-left toe -->
+    <ellipse cx="14" cy="28" rx="6" ry="7.5" fill="#c9a84c" opacity="0.9" transform="rotate(-20 14 28)"/>
+    <!-- Top-center-left toe -->
+    <ellipse cx="25" cy="22" rx="6" ry="7.5" fill="#c9a84c" opacity="0.9" transform="rotate(-8 25 22)"/>
+    <!-- Top-center-right toe -->
+    <ellipse cx="38" cy="22" rx="6" ry="7.5" fill="#c9a84c" opacity="0.9" transform="rotate(8 38 22)"/>
+    <!-- Top-right toe -->
+    <ellipse cx="50" cy="28" rx="6" ry="7.5" fill="#c9a84c" opacity="0.9" transform="rotate(20 50 28)"/>
+    <!-- Inner pad highlight -->
+    <ellipse cx="32" cy="43" rx="9" ry="7" fill="rgba(255,220,100,0.18)"/>
+  </svg>
+</div>
+<div class="cursor-ring" id="cursorRing"></div>
+
+<!-- Navigation -->
+<nav>
+  <div class="nav-logo">Wildlife Explorer</div>
+  <ul class="nav-links">
+    <li><a href="#animals">Species</a></li>
+    <li><a href="#timeline">Timeline</a></li>
+    <li><a href="#cards">Discover</a></li>
+    <li><a href="#habitat">Habitats</a></li>
+    <li><a href="#globe-section">Globe</a></li>
+  </ul>
+</nav>
+
+<!-- ==================== HERO ==================== -->
+<section id="hero">
+  <div class="hero-bg"></div>
+  <div class="light-rays"></div>
+  
+  <!-- Jungle illustrated scene -->
+  <div class="jungle-illustration">
+    <svg viewBox="0 0 1400 900" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+      <!-- Sky gradient -->
+      <defs>
+        <radialGradient id="skyGrad" cx="50%" cy="30%" r="70%">
+          <stop offset="0%" stop-color="#1a3a10" stop-opacity="0.9"/>
+          <stop offset="100%" stop-color="#060e04" stop-opacity="1"/>
+        </radialGradient>
+        <filter id="roughen">
+          <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="4" seed="2"/>
+          <feDisplacementMap in="SourceGraphic" scale="3"/>
+        </filter>
+      </defs>
+      <rect width="1400" height="900" fill="url(#skyGrad)"/>
+
+      <!-- Back mountains / hills -->
+      <ellipse cx="200" cy="400" rx="280" ry="200" fill="#1a3a10" opacity="0.5"/>
+      <ellipse cx="1200" cy="380" rx="240" ry="180" fill="#1a3a10" opacity="0.5"/>
+      <ellipse cx="700" cy="350" rx="320" ry="220" fill="#22461a" opacity="0.4"/>
+
+      <!-- Fan palms — background row -->
+      <!-- Fan palm left BG -->
+      <g transform="translate(80,100)" opacity="0.55">
+        <line x1="0" y1="0" x2="0" y2="180" stroke="#4a7a30" stroke-width="10" stroke-linecap="round"/>
+        <g transform="translate(0,0)">
+          <line x1="0" y1="0" x2="-90" y2="-40" stroke="#3a6a22" stroke-width="3" opacity="0.8"/>
+          <line x1="0" y1="0" x2="-70" y2="-80" stroke="#3a6a22" stroke-width="3" opacity="0.8"/>
+          <line x1="0" y1="0" x2="-30" y2="-100" stroke="#3a6a22" stroke-width="3" opacity="0.8"/>
+          <line x1="0" y1="0" x2="20" y2="-105" stroke="#3a6a22" stroke-width="3" opacity="0.8"/>
+          <line x1="0" y1="0" x2="65" y2="-90" stroke="#3a6a22" stroke-width="3" opacity="0.8"/>
+          <line x1="0" y1="0" x2="95" y2="-55" stroke="#3a6a22" stroke-width="3" opacity="0.8"/>
+          <line x1="0" y1="0" x2="100" y2="-10" stroke="#3a6a22" stroke-width="3" opacity="0.8"/>
+          <!-- leaf wedges -->
+          <ellipse cx="-50" cy="-20" rx="50" ry="16" fill="#2a5a18" opacity="0.7" transform="rotate(-24,-50,-20)"/>
+          <ellipse cx="-38" cy="-48" rx="44" ry="14" fill="#2a5a18" opacity="0.7" transform="rotate(-45,-38,-48)"/>
+          <ellipse cx="-8" cy="-60" rx="44" ry="14" fill="#3a6a25" opacity="0.7" transform="rotate(-70,-8,-60)"/>
+          <ellipse cx="22" cy="-62" rx="44" ry="14" fill="#3a6a25" opacity="0.7" transform="rotate(-85,22,-62)"/>
+          <ellipse cx="48" cy="-52" rx="44" ry="14" fill="#2a5a18" opacity="0.7" transform="rotate(-105,48,-52)"/>
+          <ellipse cx="65" cy="-34" rx="42" ry="13" fill="#2a5a18" opacity="0.7" transform="rotate(-120,65,-34)"/>
+        </g>
+      </g>
+
+      <!-- Fan palm right BG -->
+      <g transform="translate(1280,80)" opacity="0.55">
+        <line x1="0" y1="0" x2="0" y2="200" stroke="#4a7a30" stroke-width="10" stroke-linecap="round"/>
+        <g transform="translate(0,0)">
+          <line x1="0" y1="0" x2="-100" y2="-30" stroke="#3a6a22" stroke-width="3" opacity="0.8"/>
+          <line x1="0" y1="0" x2="-80" y2="-75" stroke="#3a6a22" stroke-width="3" opacity="0.8"/>
+          <line x1="0" y1="0" x2="-30" y2="-105" stroke="#3a6a22" stroke-width="3" opacity="0.8"/>
+          <line x1="0" y1="0" x2="30" y2="-105" stroke="#3a6a22" stroke-width="3" opacity="0.8"/>
+          <line x1="0" y1="0" x2="80" y2="-75" stroke="#3a6a22" stroke-width="3" opacity="0.8"/>
+          <line x1="0" y1="0" x2="100" y2="-30" stroke="#3a6a22" stroke-width="3" opacity="0.8"/>
+          <ellipse cx="-56" cy="-15" rx="52" ry="15" fill="#2a5a18" opacity="0.7" transform="rotate(-17,-56,-15)"/>
+          <ellipse cx="-45" cy="-46" rx="48" ry="14" fill="#2a5a18" opacity="0.7" transform="rotate(-43,-45,-46)"/>
+          <ellipse cx="-8" cy="-65" rx="46" ry="14" fill="#3a6a25" opacity="0.7" transform="rotate(-73,-8,-65)"/>
+          <ellipse cx="30" cy="-65" rx="46" ry="14" fill="#3a6a25" opacity="0.7" transform="rotate(-107,30,-65)"/>
+          <ellipse cx="46" cy="-46" rx="48" ry="14" fill="#2a5a18" opacity="0.7" transform="rotate(-135,46,-46)"/>
+          <ellipse cx="56" cy="-15" rx="52" ry="15" fill="#2a5a18" opacity="0.7" transform="rotate(-163,56,-15)"/>
+        </g>
+      </g>
+
+      <!-- Mid fan palms -->
+      <g transform="translate(400,50)" opacity="0.5">
+        <line x1="0" y1="0" x2="-5" y2="220" stroke="#5a8a38" stroke-width="12" stroke-linecap="round"/>
+        <g>
+          <ellipse cx="-60" cy="-18" rx="60" ry="18" fill="#3a6a22" opacity="0.75" transform="rotate(-18,-60,-18)"/>
+          <ellipse cx="-42" cy="-55" rx="55" ry="16" fill="#3a6a22" opacity="0.75" transform="rotate(-45,-42,-55)"/>
+          <ellipse cx="-5" cy="-75" rx="55" ry="16" fill="#4a7a2a" opacity="0.75" transform="rotate(-80,-5,-75)"/>
+          <ellipse cx="38" cy="-68" rx="55" ry="16" fill="#4a7a2a" opacity="0.75" transform="rotate(-112,38,-68)"/>
+          <ellipse cx="62" cy="-40" rx="55" ry="16" fill="#3a6a22" opacity="0.75" transform="rotate(-138,62,-40)"/>
+          <ellipse cx="65" cy="-5" rx="52" ry="15" fill="#3a6a22" opacity="0.75" transform="rotate(-160,65,-5)"/>
+        </g>
+      </g>
+
+      <g transform="translate(960,30)" opacity="0.5">
+        <line x1="0" y1="0" x2="5" y2="230" stroke="#5a8a38" stroke-width="12" stroke-linecap="round"/>
+        <g>
+          <ellipse cx="-65" cy="-5" rx="60" ry="17" fill="#3a6a22" opacity="0.75" transform="rotate(-165,-65,-5)"/>
+          <ellipse cx="-60" cy="-42" rx="55" ry="16" fill="#3a6a22" opacity="0.75" transform="rotate(-138,-60,-42)"/>
+          <ellipse cx="-32" cy="-70" rx="55" ry="16" fill="#4a7a2a" opacity="0.75" transform="rotate(-110,-32,-70)"/>
+          <ellipse cx="10" cy="-77" rx="55" ry="16" fill="#4a7a2a" opacity="0.75" transform="rotate(-80,10,-77)"/>
+          <ellipse cx="48" cy="-58" rx="55" ry="16" fill="#3a6a22" opacity="0.75" transform="rotate(-45,48,-58)"/>
+          <ellipse cx="65" cy="-22" rx="55" ry="15" fill="#3a6a22" opacity="0.75" transform="rotate(-20,65,-22)"/>
+        </g>
+      </g>
+
+      <!-- Monstera large leaf left -->
+      <g transform="translate(-30, 480)" opacity="0.8">
+        <path d="M0,0 Q60,-80 140,-60 Q200,-40 180,20 Q220,0 200,60 Q180,100 120,90 Q100,150 60,160 Q20,170 0,120 Q-20,80 0,0 Z" fill="#2a5a1a" opacity="0.9"/>
+        <path d="M60,80 Q80,60 100,50" stroke="#1a3a0f" stroke-width="2" fill="none" opacity="0.6"/>
+        <path d="M80,100 Q110,90 130,70" stroke="#1a3a0f" stroke-width="2" fill="none" opacity="0.6"/>
+        <!-- holes -->
+        <ellipse cx="70" cy="40" rx="12" ry="7" fill="#0d1a08" opacity="0.8" transform="rotate(-20,70,40)"/>
+        <ellipse cx="110" cy="20" rx="10" ry="6" fill="#0d1a08" opacity="0.8" transform="rotate(-10,110,20)"/>
+        <ellipse cx="140" cy="40" rx="10" ry="6" fill="#0d1a08" opacity="0.8" transform="rotate(10,140,40)"/>
+      </g>
+
+      <!-- Tall thin trunks (like in the image) -->
+      <rect x="590" y="120" width="16" height="480" fill="#6a4a22" rx="4" opacity="0.7"/>
+      <rect x="620" y="100" width="12" height="500" fill="#7a5a2a" rx="4" opacity="0.6"/>
+      <rect x="780" y="140" width="14" height="460" fill="#6a4a22" rx="4" opacity="0.65"/>
+
+      <!-- Pink star flowers (matching image) -->
+      <g transform="translate(300,350)" opacity="0.8">
+        <circle cx="0" cy="0" r="5" fill="#c4746a"/>
+        <ellipse cx="0" cy="-22" rx="5" ry="12" fill="#d4948a"/>
+        <ellipse cx="0" cy="-22" rx="5" ry="12" fill="#d4948a" transform="rotate(45)"/>
+        <ellipse cx="0" cy="-22" rx="5" ry="12" fill="#d4948a" transform="rotate(90)"/>
+        <ellipse cx="0" cy="-22" rx="5" ry="12" fill="#d4948a" transform="rotate(135)"/>
+        <ellipse cx="0" cy="-22" rx="5" ry="12" fill="#d4948a" transform="rotate(180)"/>
+        <ellipse cx="0" cy="-22" rx="5" ry="12" fill="#d4948a" transform="rotate(225)"/>
+        <ellipse cx="0" cy="-22" rx="5" ry="12" fill="#d4948a" transform="rotate(270)"/>
+        <ellipse cx="0" cy="-22" rx="5" ry="12" fill="#d4948a" transform="rotate(315)"/>
+      </g>
+      <g transform="translate(350,310)" opacity="0.6">
+        <circle cx="0" cy="0" r="4" fill="#c4746a"/>
+        <ellipse cx="0" cy="-16" rx="4" ry="9" fill="#d4948a" transform="rotate(0)"/>
+        <ellipse cx="0" cy="-16" rx="4" ry="9" fill="#d4948a" transform="rotate(60)"/>
+        <ellipse cx="0" cy="-16" rx="4" ry="9" fill="#d4948a" transform="rotate(120)"/>
+        <ellipse cx="0" cy="-16" rx="4" ry="9" fill="#d4948a" transform="rotate(180)"/>
+        <ellipse cx="0" cy="-16" rx="4" ry="9" fill="#d4948a" transform="rotate(240)"/>
+        <ellipse cx="0" cy="-16" rx="4" ry="9" fill="#d4948a" transform="rotate(300)"/>
+      </g>
+
+      <!-- Blue spiky plants (right side like image) -->
+      <g transform="translate(1100,500)" opacity="0.75">
+        <line x1="0" y1="0" x2="-30" y2="-100" stroke="#7ab8c8" stroke-width="4" stroke-linecap="round"/>
+        <line x1="0" y1="0" x2="-10" y2="-115" stroke="#7ab8c8" stroke-width="4" stroke-linecap="round"/>
+        <line x1="0" y1="0" x2="15" y2="-110" stroke="#8acad8" stroke-width="4" stroke-linecap="round"/>
+        <line x1="0" y1="0" x2="35" y2="-95" stroke="#7ab8c8" stroke-width="4" stroke-linecap="round"/>
+        <line x1="0" y1="0" x2="50" y2="-75" stroke="#7ab8c8" stroke-width="4" stroke-linecap="round"/>
+        <line x1="0" y1="0" x2="-45" y2="-80" stroke="#6aa8b8" stroke-width="3" stroke-linecap="round"/>
+      </g>
+      <g transform="translate(1160,530)" opacity="0.6">
+        <line x1="0" y1="0" x2="-20" y2="-80" stroke="#7ab8c8" stroke-width="3" stroke-linecap="round"/>
+        <line x1="0" y1="0" x2="5" y2="-90" stroke="#7ab8c8" stroke-width="3" stroke-linecap="round"/>
+        <line x1="0" y1="0" x2="25" y2="-78" stroke="#7ab8c8" stroke-width="3" stroke-linecap="round"/>
+        <line x1="0" y1="0" x2="40" y2="-60" stroke="#7ab8c8" stroke-width="3" stroke-linecap="round"/>
+      </g>
+
+      <!-- Ground — golden/yellow-green like the image -->
+      <ellipse cx="700" cy="680" rx="600" ry="100" fill="#5a7a28" opacity="0.35"/>
+      <rect x="0" y="700" width="1400" height="200" fill="#2a3a10" opacity="0.8"/>
+
+      <!-- Dotted dark shrubs (center like image) -->
+      <g transform="translate(650,580)" opacity="0.7">
+        <ellipse cx="0" cy="0" rx="90" ry="60" fill="#1a3010"/>
+        <circle cx="-30" cy="-20" r="8" fill="#2a4a18"/>
+        <circle cx="0" cy="-30" r="9" fill="#2a4a18"/>
+        <circle cx="35" cy="-22" r="8" fill="#2a4a18"/>
+        <circle cx="55" cy="-5" r="7" fill="#2a4a18"/>
+        <circle cx="-50" cy="-5" r="7" fill="#2a4a18"/>
+        <circle cx="-20" cy="10" r="6" fill="#2a4a18"/>
+        <circle cx="20" cy="12" r="6" fill="#2a4a18"/>
+      </g>
+
+      <!-- Pink vine curls (top right corner like image) -->
+      <path d="M1340,0 Q1380,80 1320,120 Q1260,160 1300,200" stroke="#d4948a" stroke-width="4" fill="none" opacity="0.7" stroke-linecap="round"/>
+      <path d="M1320,140 Q1360,150 1340,180" stroke="#d4948a" stroke-width="3" fill="none" opacity="0.6" stroke-linecap="round"/>
+
+      <!-- Bottom mauve/dark flowers -->
+      <g transform="translate(1200,830)" opacity="0.9">
+        <circle cx="0" cy="0" r="6" fill="#8a5a68"/>
+        <ellipse cx="0" cy="-28" rx="9" ry="16" fill="#9a6a78"/>
+        <ellipse cx="0" cy="-28" rx="9" ry="16" fill="#9a6a78" transform="rotate(72)"/>
+        <ellipse cx="0" cy="-28" rx="9" ry="16" fill="#9a6a78" transform="rotate(144)"/>
+        <ellipse cx="0" cy="-28" rx="9" ry="16" fill="#9a6a78" transform="rotate(216)"/>
+        <ellipse cx="0" cy="-28" rx="9" ry="16" fill="#9a6a78" transform="rotate(288)"/>
+      </g>
+      <g transform="translate(1320,850)" opacity="0.8">
+        <circle cx="0" cy="0" r="5" fill="#7a4a58"/>
+        <ellipse cx="0" cy="-22" rx="7" ry="13" fill="#8a5a68"/>
+        <ellipse cx="0" cy="-22" rx="7" ry="13" fill="#8a5a68" transform="rotate(72)"/>
+        <ellipse cx="0" cy="-22" rx="7" ry="13" fill="#8a5a68" transform="rotate(144)"/>
+        <ellipse cx="0" cy="-22" rx="7" ry="13" fill="#8a5a68" transform="rotate(216)"/>
+        <ellipse cx="0" cy="-22" rx="7" ry="13" fill="#8a5a68" transform="rotate(288)"/>
+      </g>
+    </svg>
+  </div>
+
+  <!-- Forest SVG layers -->
+  <div class="forest-layer forest-back">
+    <svg viewBox="0 0 1200 300" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M0,300 L0,180 Q30,100 60,160 Q90,80 120,140 Q150,60 180,130 Q210,50 240,120 Q270,70 300,140 Q330,55 360,125 Q390,65 420,130 Q450,50 480,120 Q510,70 540,135 Q570,55 600,125 Q630,65 660,130 Q690,50 720,120 Q750,70 780,140 Q810,55 840,125 Q870,65 900,130 Q930,50 960,120 Q990,70 1020,140 Q1050,60 1080,130 Q1110,50 1140,120 Q1170,70 1200,140 L1200,300 Z"
+        fill="#0a1e0d"/>
+    </svg>
+  </div>
+  <div class="forest-layer forest-mid">
+    <svg viewBox="0 0 1200 280" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M0,280 L0,200 Q20,130 50,180 Q80,100 110,160 Q140,70 170,140 Q200,90 230,155 Q260,65 290,140 Q320,80 350,150 Q380,60 410,135 Q440,80 470,145 Q500,55 530,130 Q560,85 590,145 Q620,60 650,135 Q680,80 710,145 Q740,55 770,130 Q800,85 830,150 Q860,65 890,140 Q920,80 950,150 Q980,60 1010,135 Q1040,80 1070,150 Q1100,65 1130,140 Q1160,80 1200,150 L1200,280 Z"
+        fill="#071510"/>
+    </svg>
+  </div>
+  <div class="forest-layer forest-front">
+    <svg viewBox="0 0 1200 250" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M0,250 L0,200 Q15,160 35,190 Q55,140 75,175 Q95,110 120,170 Q145,130 165,175 Q185,95 210,160 Q235,125 255,170 Q275,90 300,155 Q325,120 345,165 Q365,85 390,150 Q415,115 435,160 Q455,80 480,145 Q505,115 525,160 Q545,80 570,150 Q595,115 615,160 Q635,80 660,150 Q685,115 705,160 Q725,80 750,150 Q775,115 795,160 Q815,80 840,150 Q865,115 885,160 Q905,80 930,150 Q955,115 975,160 Q995,80 1020,155 Q1045,120 1065,165 Q1085,85 1110,155 Q1135,120 1155,165 Q1175,90 1200,165 L1200,250 Z"
+        fill="#030d05"/>
+    </svg>
+  </div>
+
+  <!-- Particles -->
+  <div class="particles" id="particles"></div>
+
+  <div class="hero-content">
+    <p class="hero-eyebrow">National Geographic Presents</p>
+    <h1 class="hero-title">Wildlife<br>Explorer</h1>
+    <div class="hero-divider"></div>
+    <p class="hero-subtitle">Explore the beauty of nature</p>
+    <a href="#animals" class="hero-cta" style="margin-top: 32px; display: inline-flex;">
+      <span>Begin Journey</span>
+      <span>→</span>
+    </a>
+  </div>
+
+  <div class="scroll-indicator">
+    <span>Scroll</span>
+    <div class="scroll-mouse"><div class="scroll-wheel"></div></div>
+  </div>
+</section>
+
+<!-- ==================== SECTION 2: ANIMALS ==================== -->
+<section id="animals">
+  <div class="section-header scroll-reveal">
+    <span class="section-label">Our Subjects</span>
+    <h2 class="section-title">The <span>Wild</span> Ones</h2>
+    <div class="section-line"></div>
+  </div>
+
+  <div class="orbit-container scroll-reveal" id="orbitContainer">
+    <div class="orbit-path"></div>
+    <div class="orbit-center">
+      <div class="orbit-center-ring">
+        <div class="orbit-center-text">Select<br>a<br>Species</div>
+      </div>
+    </div>
+    <!-- Animal nodes positioned by JS -->
+  </div>
+
+  <div class="info-panel" id="infoPanel">
+    <button class="info-panel-close" onclick="closeInfoPanel()">✕</button>
+    <div class="info-panel-emoji" id="infoPanelEmoji"></div>
+    <div class="info-panel-name" id="infoPanelName"></div>
+    <div class="info-panel-status" id="infoPanelStatus"></div>
+    <div class="info-panel-stat">
+      <span class="info-panel-stat-key">Habitat</span>
+      <span class="info-panel-stat-val" id="infoPanelHabitat"></span>
+    </div>
+    <div class="info-panel-stat">
+      <span class="info-panel-stat-key">Population</span>
+      <span class="info-panel-stat-val" id="infoPanelPop"></span>
+    </div>
+    <div class="info-panel-stat">
+      <span class="info-panel-stat-key">Lifespan</span>
+      <span class="info-panel-stat-val" id="infoPanelLife"></span>
+    </div>
+    <br>
+    <p class="info-panel-desc" id="infoPanelDesc"></p>
+  </div>
+</section>
+
+<!-- ==================== SECTION 3: TIMELINE ==================== -->
+<section id="timeline">
+  <div class="section-header scroll-reveal">
+    <span class="section-label">Through the Ages</span>
+    <h2 class="section-title">Wildlife <span>History</span></h2>
+    <div class="section-line"></div>
+  </div>
+
+  <div class="timeline-container">
+    <div class="timeline-spine">
+      <div class="timeline-progress" id="timelineProgress"></div>
+    </div>
+
+    <div class="timeline-item" data-delay="0">
+      <div class="timeline-card">
+        <div class="timeline-year">1800</div>
+        <div class="timeline-event-title">Forests Everywhere</div>
+        <p class="timeline-event-desc">Earth's surface was blanketed by ancient old-growth forests. Wildlife populations thrived in undisturbed habitats spanning millions of hectares. Biodiversity was at its peak in modern history.</p>
+      </div>
+      <div class="timeline-dot"></div>
+      <div style="width: calc(50% - 50px);"></div>
+    </div>
+
+    <div class="timeline-item" data-delay="200">
+      <div style="width: calc(50% - 50px);"></div>
+      <div class="timeline-dot"></div>
+      <div class="timeline-card">
+        <div class="timeline-year">1950</div>
+        <div class="timeline-event-title">Industrial Growth</div>
+        <p class="timeline-event-desc">Post-war industrialization accelerated deforestation and habitat destruction. Urban expansion fragmented wildlife corridors, isolating populations and triggering the first mass species decline of the modern era.</p>
+      </div>
+    </div>
+
+    <div class="timeline-item" data-delay="400">
+      <div class="timeline-card">
+        <div class="timeline-year">2000</div>
+        <div class="timeline-event-title">Endangered Species</div>
+        <p class="timeline-event-desc">The IUCN Red List documented over 11,000 threatened species worldwide. Iconic animals — tigers, elephants, gorillas — faced critical population declines. Global awareness began to shift.</p>
+      </div>
+      <div class="timeline-dot"></div>
+      <div style="width: calc(50% - 50px);"></div>
+    </div>
+
+    <div class="timeline-item" data-delay="600">
+      <div style="width: calc(50% - 50px);"></div>
+      <div class="timeline-dot"></div>
+      <div class="timeline-card">
+        <div class="timeline-year">2024</div>
+        <div class="timeline-event-title">Conservation Efforts</div>
+        <p class="timeline-event-desc">Nations pledged to protect 30% of land and ocean by 2030. Rewilding programs reintroduced apex predators. Technology-aided anti-poaching operations and genetic recovery programs show promising results.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== SECTION 4: CARDS ==================== -->
+<section id="cards">
+  <div class="section-header scroll-reveal">
+    <span class="section-label">Species Profiles</span>
+    <h2 class="section-title">Discover the <span>Animals</span></h2>
+    <div class="section-line"></div>
+  </div>
+
+  <!-- Day / Night Toggle -->
+  <div class="daynight-toggle-wrap scroll-reveal">
+    <span class="daynight-toggle-label active" id="dayLabel">☀️ Daytime</span>
+    <div class="toggle-track day-mode" id="daynightToggle" onclick="toggleDayNight()">
+      <div class="toggle-knob" id="toggleKnob">☀️</div>
+    </div>
+    <span class="daynight-toggle-label" id="nightLabel">🌙 Nighttime</span>
+  </div>
+  <div style="text-align:center; margin-bottom:32px;">
+    <span class="mode-indicator day" id="modeIndicator">☀️ &nbsp;Showing Day Animals</span>
+  </div>
+
+  <div class="cards-grid" id="cardsGrid"></div>
+</section>
+
+<!-- ==================== SECTION 5: CUBE ==================== -->
+<section id="habitat">
+  <div class="section-header scroll-reveal">
+    <span class="section-label">Natural Worlds</span>
+    <h2 class="section-title">Habitat <span>Cube</span></h2>
+    <div class="section-line"></div>
+  </div>
+
+  <div class="cube-scene scroll-reveal" id="cubeScene">
+    <div class="cube" id="cube">
+      <div class="cube-face face-front"><span class="cube-face-icon">🌲</span><span class="cube-face-label">Forest</span></div>
+      <div class="cube-face face-back"><span class="cube-face-icon">🏜️</span><span class="cube-face-label">Desert</span></div>
+      <div class="cube-face face-right"><span class="cube-face-icon">🌊</span><span class="cube-face-label">Ocean</span></div>
+      <div class="cube-face face-left"><span class="cube-face-icon">🧊</span><span class="cube-face-label">Arctic</span></div>
+      <div class="cube-face face-top"><span class="cube-face-icon">⛰️</span><span class="cube-face-label">Mountains</span></div>
+      <div class="cube-face face-bottom"><span class="cube-face-icon">🌿</span><span class="cube-face-label">Jungle</span></div>
+    </div>
+  </div>
+
+  <div class="habitat-info scroll-reveal">
+    <div class="habitat-name" id="habitatName">Hover or click a face</div>
+    <p class="habitat-desc" id="habitatDesc">Rotate the cube to explore different animal habitats around the world. Each face represents a unique ecosystem.</p>
+  </div>
+</section>
+
+<!-- ==================== SECTION 6: GALLERY ==================== -->
+<section id="gallery">
+  <div class="section-header scroll-reveal" style="padding: 0 60px;">
+    <span class="section-label">Visual Journey</span>
+    <h2 class="section-title">Wildlife <span>Gallery</span></h2>
+    <div class="section-line"></div>
+  </div>
+
+  <div class="gallery-container scroll-reveal" id="galleryContainer">
+    <div class="gallery-track" id="galleryTrack">
+      <!-- Slides generated by JS -->
+    </div>
+    <div class="gallery-overlay"></div>
+    <button class="gallery-nav gallery-prev" onclick="galleryPrev()">‹</button>
+    <button class="gallery-nav gallery-next" onclick="galleryNext()">›</button>
+  </div>
+  <div class="gallery-dots" id="galleryDots"></div>
+</section>
+
+<!-- ==================== SECTION 7: ATMOSPHERIC ==================== -->
+<section id="atmospheric">
+  <div class="glow-orb glow-orb-1"></div>
+  <div class="glow-orb glow-orb-2"></div>
+  <div class="leaves-container" id="leavesContainer"></div>
+
+  <div class="parallax-layers">
+    <div class="parallax-layer parallax-1"></div>
+    <div class="parallax-layer parallax-2"></div>
+  </div>
+
+  <div class="atmospheric-quote scroll-reveal">
+    <blockquote>
+      "In every walk with Nature, one receives far more than he seeks. The clearest way into the Universe is through a forest wilderness."
+    </blockquote>
+    <cite>— John Muir, Naturalist</cite>
+  </div>
+</section>
+
+<!-- ==================== SECTION 8: GLOBE ==================== -->
+<section id="globe-section">
+  <div class="section-header scroll-reveal">
+    <span class="section-label">Global Distribution</span>
+    <h2 class="section-title">Interactive <span>Globe</span></h2>
+    <div class="section-line"></div>
+  </div>
+
+  <div class="globe-wrapper scroll-reveal">
+    <div class="globe-canvas-container">
+      <div class="globe-atmosphere" id="globeAtmosphere"></div>
+      <canvas id="globe-canvas" width="580" height="580" style="width:480px;height:480px;border-radius:50%;"></canvas>
+    </div>
+
+    <div class="globe-sidebar">
+      <div class="animal-selector">
+        <div class="animal-selector-title">Select Animal</div>
+        <div id="animalButtons"></div>
+      </div>
+      <div class="country-cards" id="countryCards">
+        <div style="color: var(--text-muted); font-size: 0.8rem; line-height: 1.7; text-align: center; padding: 20px 0;">
+          Select an animal to see its global distribution and population data across key habitats.
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+  <div class="modal" id="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-icon" id="modalIcon"></div>
+    <div class="modal-title" id="modalTitle"></div>
+    <div class="modal-subtitle" id="modalSubtitle"></div>
+    <p class="modal-body" id="modalBody"></p>
+    <div class="modal-stats" id="modalStats"></div>
+  </div>
+</div>
+
+<!-- Footer -->
+<footer>
+  <div class="footer-brand">Wildlife Explorer</div>
+  <div>© 2024 — Dedicated to Conservation</div>
+  <div>Powered by Nature</div>
+</footer>
+
+<script>
+// ======================== PAW CURSOR ========================
+const cursor = document.getElementById('cursor');
+const cursorRing = document.getElementById('cursorRing');
+let mx = 0, my = 0, rx = 0, ry = 0;
+
+document.addEventListener('mousemove', e => {
+  mx = e.clientX; my = e.clientY;
+  cursor.style.left = mx + 'px';
+  cursor.style.top = my + 'px';
+});
+
+function animateCursor() {
+  rx += (mx - rx) * 0.12;
+  ry += (my - ry) * 0.12;
+  cursorRing.style.left = rx + 'px';
+  cursorRing.style.top = ry + 'px';
+  requestAnimationFrame(animateCursor);
+}
+animateCursor();
+
+document.querySelectorAll('a, button, .animal-node, .animal-card, .animal-btn').forEach(el => {
+  el.addEventListener('mouseenter', () => {
+    cursor.classList.add('big');
+    cursorRing.classList.add('big');
+  });
+  el.addEventListener('mouseleave', () => {
+    cursor.classList.remove('big');
+    cursorRing.classList.remove('big');
+  });
+});
+
+// ======================== PARTICLES ========================
+const particlesEl = document.getElementById('particles');
+for (let i = 0; i < 30; i++) {
+  const p = document.createElement('div');
+  p.className = 'particle';
+  p.style.cssText = `
+    left: ${Math.random() * 100}%;
+    --dur: ${6 + Math.random() * 10}s;
+    --delay: ${Math.random() * 8}s;
+    --drift: ${(Math.random() - 0.5) * 200}px;
+    width: ${2 + Math.random() * 3}px;
+    height: ${2 + Math.random() * 3}px;
+    opacity: ${0.3 + Math.random() * 0.5};
+  `;
+  particlesEl.appendChild(p);
+}
+
+// ======================== DATA ========================
+const animals = [
+  { name: 'Lion', emoji: '🦁', status: 'Vulnerable', statusClass: 'status-vulnerable',
+    habitat: 'Savanna', population: '~25,000', lifespan: '10-14 yrs', timeOfDay: 'day',
+    desc: 'The apex predator of the African savanna, the lion is the only truly social wild cat. With its iconic mane and thunderous roar, it rules vast territories across Sub-Saharan Africa.',
+    cardDesc: 'Apex predator of the African savanna. Social hunters living in prides.',
+    bio: 'Lions are the second-largest wild cat. They are unique among cats in that they live in social groups called prides. Males are distinguished by their iconic manes, which signal age and genetic health to females.',
+    stats: { Weight: '190kg avg', Speed: '80 km/h', Range: 'Africa/India', Diet: 'Carnivore' },
+    bgColor: 'linear-gradient(135deg,rgba(80,50,10,0.4),rgba(40,30,5,0.7))',
+    svgIllustration: `<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+      <!-- body -->
+      <ellipse cx="62" cy="78" rx="32" ry="20" fill="#c8922a"/>
+      <!-- mane -->
+      <circle cx="48" cy="52" r="28" fill="#7a4a10" opacity="0.9"/>
+      <circle cx="48" cy="52" r="22" fill="#a06820"/>
+      <!-- head -->
+      <ellipse cx="48" cy="48" rx="18" ry="16" fill="#d4a840"/>
+      <!-- ears -->
+      <ellipse cx="32" cy="34" rx="7" ry="8" fill="#a06820"/>
+      <ellipse cx="32" cy="34" rx="4" ry="5" fill="#e8c060" transform="rotate(-10,32,34)"/>
+      <ellipse cx="64" cy="34" rx="7" ry="8" fill="#a06820"/>
+      <ellipse cx="64" cy="34" rx="4" ry="5" fill="#e8c060" transform="rotate(10,64,34)"/>
+      <!-- eyes -->
+      <ellipse cx="41" cy="46" rx="4.5" ry="4" fill="#f5e090"/>
+      <ellipse cx="55" cy="46" rx="4.5" ry="4" fill="#f5e090"/>
+      <ellipse cx="42" cy="46.5" rx="2.5" ry="3" fill="#2a1800"/>
+      <ellipse cx="56" cy="46.5" rx="2.5" ry="3" fill="#2a1800"/>
+      <circle cx="41.5" cy="45.5" r="1" fill="white" opacity="0.8"/>
+      <circle cx="55.5" cy="45.5" r="1" fill="white" opacity="0.8"/>
+      <!-- nose -->
+      <ellipse cx="48" cy="56" rx="5" ry="3" fill="#c07030"/>
+      <ellipse cx="48" cy="57" rx="3" ry="2" fill="#a05020"/>
+      <!-- mouth -->
+      <path d="M43,60 Q48,64 53,60" stroke="#8a3a10" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+      <!-- whiskers -->
+      <line x1="30" y1="55" x2="44" y2="57" stroke="#f0e8d0" stroke-width="1" opacity="0.7"/>
+      <line x1="30" y1="59" x2="44" y2="59" stroke="#f0e8d0" stroke-width="1" opacity="0.7"/>
+      <line x1="66" y1="55" x2="52" y2="57" stroke="#f0e8d0" stroke-width="1" opacity="0.7"/>
+      <line x1="66" y1="59" x2="52" y2="59" stroke="#f0e8d0" stroke-width="1" opacity="0.7"/>
+      <!-- legs -->
+      <rect x="40" y="94" width="9" height="18" fill="#c8922a" rx="4"/>
+      <rect x="54" y="94" width="9" height="18" fill="#c8922a" rx="4"/>
+      <rect x="77" y="90" width="8" height="16" fill="#c8922a" rx="4"/>
+      <rect x="90" y="90" width="8" height="16" fill="#c8922a" rx="4"/>
+      <!-- tail -->
+      <path d="M94,75 Q108,60 106,50 Q104,44 110,42" stroke="#c8922a" stroke-width="5" fill="none" stroke-linecap="round"/>
+      <circle cx="110" cy="40" r="6" fill="#7a4a10"/>
+      <!-- sun dapple -->
+      <ellipse cx="75" cy="40" rx="18" ry="10" fill="#ffd060" opacity="0.12" transform="rotate(-20,75,40)"/>
+    </svg>`
+  },
+  { name: 'Tiger', emoji: '🐯', status: 'Endangered', statusClass: 'status-endangered',
+    habitat: 'Tropical Forest', population: '~3,900', lifespan: '10-15 yrs', timeOfDay: 'night',
+    desc: 'The largest wild cat on Earth, the tiger\'s striped coat is as unique as a fingerprint. Solitary and powerful, it stalks dense jungles across Asia under the cloak of darkness.',
+    cardDesc: 'The largest wild cat. Solitary ambush predator of Asian forests.',
+    bio: 'Tigers are the largest of the big cats. Each individual has unique stripe patterns. They are powerful swimmers and surprisingly good climbers. Only ~3,900 remain in the wild.',
+    stats: { Weight: '300kg max', Speed: '65 km/h', Range: 'South/SE Asia', Diet: 'Carnivore' },
+    bgColor: 'linear-gradient(135deg,rgba(60,30,5,0.5),rgba(20,15,5,0.8))',
+    svgIllustration: `<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+      <!-- body -->
+      <ellipse cx="65" cy="80" rx="34" ry="19" fill="#e07820"/>
+      <!-- stripes on body -->
+      <path d="M50,68 Q52,85 48,92" stroke="#2a1800" stroke-width="3.5" fill="none" stroke-linecap="round" opacity="0.7"/>
+      <path d="M62,65 Q65,82 61,93" stroke="#2a1800" stroke-width="3.5" fill="none" stroke-linecap="round" opacity="0.7"/>
+      <path d="M74,67 Q77,83 74,93" stroke="#2a1800" stroke-width="3.5" fill="none" stroke-linecap="round" opacity="0.7"/>
+      <!-- head -->
+      <ellipse cx="42" cy="48" rx="22" ry="20" fill="#e07820"/>
+      <!-- white face -->
+      <ellipse cx="42" cy="56" rx="14" ry="10" fill="#f0e0c0" opacity="0.8"/>
+      <!-- ears -->
+      <ellipse cx="25" cy="30" rx="8" ry="10" fill="#e07820"/>
+      <ellipse cx="25" cy="30" rx="4" ry="5" fill="#2a1800" opacity="0.6"/>
+      <ellipse cx="59" cy="30" rx="8" ry="10" fill="#e07820"/>
+      <ellipse cx="59" cy="30" rx="4" ry="5" fill="#2a1800" opacity="0.6"/>
+      <!-- head stripes -->
+      <path d="M24,38 Q30,42 24,52" stroke="#2a1800" stroke-width="3" fill="none" opacity="0.7"/>
+      <path d="M60,38 Q54,42 60,52" stroke="#2a1800" stroke-width="3" fill="none" opacity="0.7"/>
+      <path d="M33,28 Q36,36 33,42" stroke="#2a1800" stroke-width="2.5" fill="none" opacity="0.6"/>
+      <path d="M51,28 Q48,36 51,42" stroke="#2a1800" stroke-width="2.5" fill="none" opacity="0.6"/>
+      <!-- eyes — night glow -->
+      <ellipse cx="35" cy="44" rx="5" ry="4.5" fill="#d4e820"/>
+      <ellipse cx="49" cy="44" rx="5" ry="4.5" fill="#d4e820"/>
+      <ellipse cx="35.5" cy="44.5" rx="2" ry="3.5" fill="#1a1000"/>
+      <ellipse cx="49.5" cy="44.5" rx="2" ry="3.5" fill="#1a1000"/>
+      <circle cx="34.5" cy="43.5" r="1.2" fill="white" opacity="0.9"/>
+      <circle cx="48.5" cy="43.5" r="1.2" fill="white" opacity="0.9"/>
+      <!-- nose -->
+      <ellipse cx="42" cy="54" rx="5" ry="3" fill="#d05030"/>
+      <!-- whiskers -->
+      <line x1="22" y1="54" x2="37" y2="56" stroke="#f0ead8" stroke-width="1" opacity="0.8"/>
+      <line x1="22" y1="58" x2="37" y2="58" stroke="#f0ead8" stroke-width="1" opacity="0.8"/>
+      <line x1="62" y1="54" x2="47" y2="56" stroke="#f0ead8" stroke-width="1" opacity="0.8"/>
+      <line x1="62" y1="58" x2="47" y2="58" stroke="#f0ead8" stroke-width="1" opacity="0.8"/>
+      <!-- night glow around eyes -->
+      <ellipse cx="35" cy="44" rx="8" ry="7" fill="#d4e820" opacity="0.1"/>
+      <ellipse cx="49" cy="44" rx="8" ry="7" fill="#d4e820" opacity="0.1"/>
+      <!-- legs -->
+      <rect x="42" y="96" width="9" height="17" fill="#e07820" rx="4"/>
+      <rect x="56" y="96" width="9" height="17" fill="#e07820" rx="4"/>
+      <rect x="78" y="92" width="9" height="15" fill="#e07820" rx="4"/>
+      <rect x="90" y="92" width="9" height="15" fill="#e07820" rx="4"/>
+      <path d="M42,103 Q50,100 58,103" stroke="#2a1800" stroke-width="2" fill="none" opacity="0.5"/>
+      <!-- tail -->
+      <path d="M99,78 Q112,65 110,55 Q108,47 114,44" stroke="#e07820" stroke-width="6" fill="none" stroke-linecap="round"/>
+      <path d="M99,78 Q112,65 110,55 Q108,47 114,44" stroke="#2a1800" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-dasharray="4,5" opacity="0.6"/>
+    </svg>`
+  },
+  { name: 'Elephant', emoji: '🐘', status: 'Vulnerable', statusClass: 'status-vulnerable',
+    habitat: 'Savanna/Forest', population: '~415,000', lifespan: '60-70 yrs', timeOfDay: 'day',
+    desc: 'Earth\'s largest land mammal moves across landscapes with ancient wisdom. Elephants display complex emotions — grief, joy, empathy — and maintain rich social bonds across generations.',
+    cardDesc: 'Earth\'s largest land animal. Highly intelligent and deeply social.',
+    bio: 'African elephants are the world\'s largest land animals. They are highly intelligent, display complex emotions, and live in matriarchal family groups. Their tusks are elongated incisor teeth.',
+    stats: { Weight: '6,000kg', Memory: 'Decades', Range: 'Africa/Asia', Diet: 'Herbivore' },
+    bgColor: 'linear-gradient(135deg,rgba(50,55,60,0.4),rgba(20,25,30,0.7))',
+    svgIllustration: `<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+      <!-- body -->
+      <ellipse cx="65" cy="80" rx="40" ry="28" fill="#7a7a82"/>
+      <!-- head -->
+      <ellipse cx="35" cy="55" rx="26" ry="24" fill="#7a7a82"/>
+      <!-- ear -->
+      <ellipse cx="18" cy="55" rx="16" ry="22" fill="#9a8a8a" opacity="0.8"/>
+      <ellipse cx="18" cy="55" rx="10" ry="15" fill="#c4a0a0" opacity="0.5"/>
+      <!-- eye -->
+      <ellipse cx="42" cy="46" rx="5" ry="5" fill="#3a3030"/>
+      <ellipse cx="42" cy="46" rx="3" ry="3" fill="#1a1010"/>
+      <circle cx="41" cy="45" r="1.2" fill="white" opacity="0.9"/>
+      <!-- wrinkles -->
+      <path d="M30,42 Q38,40 44,43" stroke="#6a6a72" stroke-width="1.5" fill="none" opacity="0.5"/>
+      <path d="M28,50 Q36,49 43,52" stroke="#6a6a72" stroke-width="1.5" fill="none" opacity="0.5"/>
+      <!-- trunk -->
+      <path d="M28,66 Q18,80 20,94 Q22,102 28,104 Q34,106 36,98 Q38,90 32,80 Q28,72 30,66" fill="#7a7a82"/>
+      <path d="M29,80 Q20,84 22,90" stroke="#6a6a72" stroke-width="1.5" fill="none" opacity="0.5"/>
+      <path d="M30,88 Q22,90 24,96" stroke="#6a6a72" stroke-width="1.5" fill="none" opacity="0.5"/>
+      <!-- tusks -->
+      <path d="M32,70 Q22,76 16,82 Q10,88 14,92 Q18,94 24,88 Q30,80 36,74" fill="#f0e8c8"/>
+      <!-- legs -->
+      <rect x="38" y="100" width="13" height="18" fill="#7a7a82" rx="6"/>
+      <rect x="55" y="102" width="13" height="16" fill="#7a7a82" rx="6"/>
+      <rect x="72" y="100" width="13" height="18" fill="#7a7a82" rx="6"/>
+      <rect x="89" y="102" width="12" height="16" fill="#7a7a82" rx="6"/>
+      <!-- tail -->
+      <path d="M105,75 Q112,80 110,90 Q108,98 112,100" stroke="#7a7a82" stroke-width="5" fill="none" stroke-linecap="round"/>
+      <circle cx="112" cy="102" r="4" fill="#6a5a5a"/>
+      <!-- top wrinkle -->
+      <path d="M55,60 Q70,55 85,60" stroke="#6a6a72" stroke-width="1.5" fill="none" opacity="0.4"/>
+      <path d="M50,70 Q65,65 80,70" stroke="#6a6a72" stroke-width="1.5" fill="none" opacity="0.4"/>
+    </svg>`
+  },
+  { name: 'Eagle', emoji: '🦅', status: 'Least Concern', statusClass: 'status-lc',
+    habitat: 'Mountains/Forests', population: 'Varied', lifespan: '20-30 yrs', timeOfDay: 'day',
+    desc: 'The supreme raptor of the skies, eagles have been symbols of power and freedom across civilizations. Their 8x magnification eyesight allows them to spot prey from kilometers above.',
+    cardDesc: 'Supreme aerial predator with extraordinary vision and wingspan.',
+    bio: 'Eagles are large, powerfully built birds of prey with heavy heads and beaks. They have exceptional eyesight — up to 8x better than humans — allowing them to spot prey from great distances.',
+    stats: { Wingspan: '2.4m max', Vision: '8x human', Range: 'Worldwide', Diet: 'Carnivore' },
+    bgColor: 'linear-gradient(135deg,rgba(40,50,70,0.4),rgba(15,20,35,0.7))',
+    svgIllustration: `<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+      <!-- wings spread -->
+      <!-- left wing -->
+      <path d="M55,60 Q30,45 8,55 Q2,58 5,65 Q10,68 30,62 Q45,58 55,65" fill="#3a2a18"/>
+      <!-- left wing feathers -->
+      <path d="M8,58 Q12,70 18,72" stroke="#2a1c10" stroke-width="2" fill="none" opacity="0.6"/>
+      <path d="M16,55 Q20,68 26,70" stroke="#2a1c10" stroke-width="2" fill="none" opacity="0.6"/>
+      <path d="M26,53 Q29,65 34,67" stroke="#2a1c10" stroke-width="2" fill="none" opacity="0.6"/>
+      <!-- right wing -->
+      <path d="M65,60 Q90,45 112,55 Q118,58 115,65 Q110,68 90,62 Q75,58 65,65" fill="#3a2a18"/>
+      <!-- right wing feathers -->
+      <path d="M112,58 Q108,70 102,72" stroke="#2a1c10" stroke-width="2" fill="none" opacity="0.6"/>
+      <path d="M104,55 Q100,68 94,70" stroke="#2a1c10" stroke-width="2" fill="none" opacity="0.6"/>
+      <path d="M94,53 Q91,65 86,67" stroke="#2a1c10" stroke-width="2" fill="none" opacity="0.6"/>
+      <!-- white tail band -->
+      <path d="M48,75 Q60,80 72,75 Q68,88 60,92 Q52,88 48,75 Z" fill="#f0f0f0"/>
+      <path d="M50,80 Q60,83 70,80" stroke="#d0d0d0" stroke-width="1" fill="none" opacity="0.6"/>
+      <!-- body -->
+      <ellipse cx="60" cy="65" rx="16" ry="18" fill="#4a3820"/>
+      <!-- white belly -->
+      <ellipse cx="60" cy="70" rx="9" ry="10" fill="#e8e0d0" opacity="0.7"/>
+      <!-- head — white (bald eagle) -->
+      <ellipse cx="60" cy="44" rx="13" ry="14" fill="#f0f0f0"/>
+      <!-- yellow beak -->
+      <path d="M60,50 Q68,52 70,56 Q68,60 60,58 Q56,56 56,52 Z" fill="#e0a820"/>
+      <!-- hooked beak tip -->
+      <path d="M68,56 Q72,58 70,62 Q66,62 66,59" fill="#c09018"/>
+      <!-- eye -->
+      <ellipse cx="55" cy="44" rx="5" ry="5" fill="#f0c820"/>
+      <ellipse cx="55" cy="44" rx="3" ry="3" fill="#1a1000"/>
+      <circle cx="54" cy="43" r="1.2" fill="white" opacity="0.9"/>
+      <!-- talons -->
+      <path d="M50,90 Q46,100 42,104 Q46,108 50,104 Q54,100 54,92" fill="#e0a820"/>
+      <path d="M50,90 Q44,98 40,100 Q42,104 46,102 Q50,98 54,92" fill="#e0a820"/>
+      <path d="M68,90 Q72,100 76,104 Q72,108 68,104 Q64,100 64,92" fill="#e0a820"/>
+      <path d="M68,90 Q74,98 78,100 Q76,104 72,102 Q68,98 64,92" fill="#e0a820"/>
+    </svg>`
+  },
+  { name: 'Owl', emoji: '🦉', status: 'Least Concern', statusClass: 'status-lc',
+    habitat: 'Forest/Grassland', population: '~1M+', lifespan: '10-25 yrs', timeOfDay: 'night',
+    desc: 'Masters of silent nocturnal flight, owls navigate absolute darkness with astonishing precision. Their asymmetric ears can pinpoint a mouse under 30cm of snow from 30 meters away.',
+    cardDesc: 'Silent night hunter. Faces the dark with incredible hearing and vision.',
+    bio: 'Owls are apex nocturnal predators with extraordinary adaptations. Their dish-shaped facial feathers focus sound waves to their ears, giving them three-dimensional hearing. They can rotate their heads 270 degrees.',
+    stats: { Vision: '100x human', Hearing: '360° sonic', Range: 'Worldwide', Diet: 'Carnivore' },
+    bgColor: 'linear-gradient(135deg,rgba(20,20,50,0.5),rgba(8,8,28,0.85))',
+    svgIllustration: `<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+      <!-- body -->
+      <ellipse cx="60" cy="82" rx="24" ry="30" fill="#7a6a4a"/>
+      <!-- wing left -->
+      <path d="M36,75 Q22,70 16,85 Q18,100 36,98 Q44,94 44,82" fill="#6a5a3a"/>
+      <!-- wing right -->
+      <path d="M84,75 Q98,70 104,85 Q102,100 84,98 Q76,94 76,82" fill="#6a5a3a"/>
+      <!-- belly pattern -->
+      <ellipse cx="60" cy="88" rx="14" ry="20" fill="#d4c8a0" opacity="0.7"/>
+      <!-- belly streaks -->
+      <path d="M54,76 Q60,78 66,76" stroke="#a09070" stroke-width="1.5" fill="none" opacity="0.6"/>
+      <path d="M52,82 Q60,85 68,82" stroke="#a09070" stroke-width="1.5" fill="none" opacity="0.6"/>
+      <path d="M52,90 Q60,93 68,90" stroke="#a09070" stroke-width="1.5" fill="none" opacity="0.6"/>
+      <path d="M54,98 Q60,100 66,98" stroke="#a09070" stroke-width="1.5" fill="none" opacity="0.6"/>
+      <!-- facial disc -->
+      <ellipse cx="60" cy="50" rx="22" ry="22" fill="#c4b488" opacity="0.9"/>
+      <ellipse cx="60" cy="50" rx="18" ry="18" fill="#d4c4a0" opacity="0.7"/>
+      <!-- ear tufts -->
+      <path d="M44,30 Q42,22 48,26 Q50,30 48,34" fill="#7a6a4a"/>
+      <path d="M76,30 Q78,22 72,26 Q70,30 72,34" fill="#7a6a4a"/>
+      <!-- HUGE NIGHT EYES -->
+      <ellipse cx="48" cy="48" rx="11" ry="11" fill="#f8e840" opacity="0.95"/>
+      <ellipse cx="72" cy="48" rx="11" ry="11" fill="#f8e840" opacity="0.95"/>
+      <!-- pupils -->
+      <circle cx="48" cy="48" r="7" fill="#1a0a00"/>
+      <circle cx="72" cy="48" r="7" fill="#1a0a00"/>
+      <!-- eye shine -->
+      <circle cx="45.5" cy="45.5" r="2.5" fill="white" opacity="0.9"/>
+      <circle cx="69.5" cy="45.5" r="2.5" fill="white" opacity="0.9"/>
+      <circle cx="50" cy="50" r="1" fill="white" opacity="0.5"/>
+      <circle cx="74" cy="50" r="1" fill="white" opacity="0.5"/>
+      <!-- eye glow -->
+      <ellipse cx="48" cy="48" rx="14" ry="14" fill="#f8e840" opacity="0.08"/>
+      <ellipse cx="72" cy="48" rx="14" ry="14" fill="#f8e840" opacity="0.08"/>
+      <!-- beak -->
+      <path d="M57,55 Q60,60 63,55 Q61,52 60,52 Q59,52 57,55 Z" fill="#c09030"/>
+      <!-- feet -->
+      <path d="M50,110 Q46,112 42,110 M50,110 Q48,114 44,114 M50,110 Q50,115 48,118 M50,110 Q54,114 56,112" stroke="#c09030" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+      <path d="M70,110 Q66,112 62,110 M70,110 Q68,114 64,114 M70,110 Q70,115 68,118 M70,110 Q74,114 76,112" stroke="#c09030" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+      <!-- night moon glow -->
+      <ellipse cx="90" cy="25" rx="16" ry="16" fill="#f8f0c0" opacity="0.12"/>
+      <ellipse cx="96" cy="20" rx="12" ry="12" fill="#d0c890" opacity="0.12"/>
+    </svg>`
+  },
+  { name: 'Wolf', emoji: '🐺', status: 'Least Concern', statusClass: 'status-lc',
+    habitat: 'Forest/Tundra', population: '~300,000', lifespan: '6-8 yrs', timeOfDay: 'night',
+    desc: 'The wolf\'s haunting howl echoes across wilderness at midnight. Highly social pack hunters, wolves are keystone predators that restore entire ecosystems simply through fear.',
+    cardDesc: 'Howling pack hunter. Keystone predator that reshapes entire ecosystems.',
+    bio: 'Wolves are highly intelligent social predators that communicate through howls audible up to 10km. A wolf pack has a complex social hierarchy. Their reintroduction in Yellowstone triggered a trophic cascade restoring rivers and forests.',
+    stats: { Weight: '45kg avg', Pack: '5-10 wolves', Range: 'N. Hemisphere', Diet: 'Carnivore' },
+    bgColor: 'linear-gradient(135deg,rgba(20,25,40,0.5),rgba(8,10,20,0.85))',
+    svgIllustration: `<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+      <!-- body -->
+      <ellipse cx="68" cy="80" rx="36" ry="20" fill="#9a9aaa"/>
+      <!-- fur texture body -->
+      <ellipse cx="55" cy="72" rx="20" ry="12" fill="#aaaabc" opacity="0.5"/>
+      <!-- neck + head -->
+      <ellipse cx="38" cy="55" rx="18" ry="16" fill="#9a9aaa"/>
+      <!-- snout -->
+      <ellipse cx="25" cy="62" rx="12" ry="9" fill="#b0b0c0"/>
+      <!-- ears -->
+      <path d="M26,42 Q22,28 32,32 Q38,36 34,44" fill="#9a9aaa"/>
+      <path d="M26,42 Q24,32 30,34 Q34,37 32,42" fill="#c4a0a0" opacity="0.6"/>
+      <path d="M50,38 Q48,24 56,28 Q62,32 58,40" fill="#9a9aaa"/>
+      <path d="M50,38 Q50,28 54,30 Q58,33 56,38" fill="#c4a0a0" opacity="0.6"/>
+      <!-- eyes — night glow -->
+      <ellipse cx="32" cy="50" rx="5.5" ry="5" fill="#a8d830"/>
+      <ellipse cx="46" cy="50" rx="5.5" ry="5" fill="#a8d830"/>
+      <ellipse cx="32.5" cy="50.5" rx="2.5" ry="3.5" fill="#1a1800"/>
+      <ellipse cx="46.5" cy="50.5" rx="2.5" ry="3.5" fill="#1a1800"/>
+      <circle cx="31" cy="49" r="1.5" fill="white" opacity="0.9"/>
+      <circle cx="45" cy="49" r="1.5" fill="white" opacity="0.9"/>
+      <!-- eye glow -->
+      <ellipse cx="32" cy="50" rx="8" ry="7" fill="#a8d830" opacity="0.1"/>
+      <ellipse cx="46" cy="50" rx="8" ry="7" fill="#a8d830" opacity="0.1"/>
+      <!-- nose -->
+      <ellipse cx="22" cy="62" rx="5" ry="3.5" fill="#3a3040"/>
+      <!-- mouth -->
+      <path d="M17,66 Q22,70 27,66" stroke="#7a6a80" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+      <!-- belly lighter -->
+      <ellipse cx="65" cy="85" rx="20" ry="12" fill="#d0d0e0" opacity="0.35"/>
+      <!-- legs -->
+      <rect x="44" y="96" width="9" height="18" fill="#9a9aaa" rx="4"/>
+      <rect x="57" y="96" width="9" height="18" fill="#9a9aaa" rx="4"/>
+      <rect x="78" y="92" width="9" height="16" fill="#9a9aaa" rx="4"/>
+      <rect x="91" y="92" width="9" height="16" fill="#9a9aaa" rx="4"/>
+      <!-- tail up -->
+      <path d="M104,70 Q114,55 112,42 Q110,34 116,30" stroke="#9a9aaa" stroke-width="8" fill="none" stroke-linecap="round"/>
+      <path d="M104,70 Q114,55 112,42 Q110,34 116,30" stroke="#d0d0e0" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.5"/>
+      <!-- moon glow top right -->
+      <ellipse cx="100" cy="18" rx="14" ry="14" fill="#e0e8f8" opacity="0.1"/>
+    </svg>`
+  },
+  { name: 'Deer', emoji: '🦌', status: 'Least Concern', statusClass: 'status-lc',
+    habitat: 'Forest/Meadow', population: 'Millions', lifespan: '10-20 yrs', timeOfDay: 'day',
+    desc: 'Graceful and alert, deer have evolved alongside predators for millions of years. The annual regrowth of antlers is one of nature\'s most remarkable regenerative feats — the fastest-growing tissue of any mammal.',
+    cardDesc: 'Graceful herbivore. Antlers grow at the fastest rate of any mammal tissue.',
+    bio: 'Deer are found on every continent except Antarctica. Male deer (bucks) grow antlers annually, with the velvet-covered antlers being among the fastest-growing tissues in nature.',
+    stats: { Weight: '200kg max', Speed: '72 km/h', Range: 'Worldwide', Diet: 'Herbivore' },
+    bgColor: 'linear-gradient(135deg,rgba(40,55,20,0.4),rgba(18,28,8,0.7))',
+    svgIllustration: `<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+      <!-- body -->
+      <ellipse cx="68" cy="80" rx="34" ry="20" fill="#c8904a"/>
+      <!-- white belly -->
+      <ellipse cx="68" cy="86" rx="20" ry="12" fill="#f0e8d0" opacity="0.6"/>
+      <!-- neck -->
+      <rect x="38" y="52" width="16" height="30" fill="#c8904a" rx="8"/>
+      <!-- head -->
+      <ellipse cx="38" cy="46" rx="16" ry="14" fill="#c8904a"/>
+      <!-- snout lighter -->
+      <ellipse cx="30" cy="54" rx="9" ry="7" fill="#d4aa70"/>
+      <!-- ears -->
+      <ellipse cx="24" cy="36" rx="7" ry="12" fill="#c8904a"/>
+      <ellipse cx="24" cy="36" rx="4" ry="8" fill="#e8c0a0" opacity="0.7"/>
+      <ellipse cx="52" cy="36" rx="7" ry="12" fill="#c8904a"/>
+      <ellipse cx="52" cy="36" rx="4" ry="8" fill="#e8c0a0" opacity="0.7"/>
+      <!-- ANTLERS -->
+      <path d="M30,34 Q26,22 22,14 Q20,8 16,6" stroke="#7a4a18" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <path d="M22,18 Q16,14 12,16" stroke="#7a4a18" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <path d="M24,24 Q18,22 14,26" stroke="#7a4a18" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <path d="M46,34 Q50,22 54,14 Q56,8 60,6" stroke="#7a4a18" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <path d="M54,18 Q60,14 64,16" stroke="#7a4a18" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <path d="M52,24 Q58,22 62,26" stroke="#7a4a18" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <!-- eyes -->
+      <ellipse cx="34" cy="42" rx="4.5" ry="4.5" fill="#2a1a08"/>
+      <ellipse cx="34" cy="42" rx="3" ry="3" fill="#1a1000"/>
+      <circle cx="33" cy="41" r="1.5" fill="white" opacity="0.9"/>
+      <!-- nose -->
+      <ellipse cx="28" cy="56" rx="4" ry="3" fill="#2a1a08"/>
+      <!-- white rump patch -->
+      <ellipse cx="100" cy="72" rx="12" ry="10" fill="#f0e8d0" opacity="0.7"/>
+      <!-- spots (fawn dapples — sun through leaves) -->
+      <circle cx="70" cy="70" r="3.5" fill="#e0c080" opacity="0.4"/>
+      <circle cx="80" cy="78" r="3" fill="#e0c080" opacity="0.4"/>
+      <circle cx="62" cy="76" r="3" fill="#e0c080" opacity="0.4"/>
+      <circle cx="75" cy="88" r="3" fill="#e0c080" opacity="0.35"/>
+      <!-- legs -->
+      <rect x="50" y="96" width="8" height="20" fill="#c8904a" rx="3"/>
+      <rect x="62" y="96" width="8" height="20" fill="#c8904a" rx="3"/>
+      <rect x="80" y="94" width="8" height="20" fill="#c8904a" rx="3"/>
+      <rect x="92" y="94" width="8" height="20" fill="#c8904a" rx="3"/>
+      <!-- hooves -->
+      <rect x="50" y="112" width="8" height="5" fill="#3a2a10" rx="2"/>
+      <rect x="62" y="112" width="8" height="5" fill="#3a2a10" rx="2"/>
+      <rect x="80" y="110" width="8" height="5" fill="#3a2a10" rx="2"/>
+      <rect x="92" y="110" width="8" height="5" fill="#3a2a10" rx="2"/>
+      <!-- tail -->
+      <ellipse cx="102" cy="70" rx="7" ry="5" fill="#f0e8d0"/>
+    </svg>`
+  },
+  { name: 'Bear', emoji: '🐻', status: 'Varies', statusClass: 'status-vulnerable',
+    habitat: 'Forest/Tundra', population: '~200,000', lifespan: '20-25 yrs', timeOfDay: 'day',
+    desc: 'The bear stands as a symbol of wilderness and primal strength. From the polar ice caps to temperate rainforests, bears are intelligent, adaptable survivors that shape the ecosystems they inhabit.',
+    cardDesc: 'Powerful and intelligent. Keystone species of forest ecosystems.',
+    bio: 'Bears are large, omnivorous mammals found across North America, Europe, and Asia. They are highly intelligent with good memories and can use simple tools. Several species hibernate in winter.',
+    stats: { Weight: '700kg max', Speed: '56 km/h', Range: 'N. Hemisphere', Diet: 'Omnivore' },
+    bgColor: 'linear-gradient(135deg,rgba(50,30,10,0.4),rgba(22,12,4,0.7))',
+    svgIllustration: `<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+      <!-- body -->
+      <ellipse cx="64" cy="84" rx="36" ry="26" fill="#7a4a22"/>
+      <!-- fur sheen -->
+      <ellipse cx="54" cy="76" rx="22" ry="16" fill="#9a6a3a" opacity="0.4"/>
+      <!-- head -->
+      <ellipse cx="40" cy="52" rx="24" ry="22" fill="#7a4a22"/>
+      <!-- round ears -->
+      <circle cx="22" cy="32" r="11" fill="#7a4a22"/>
+      <circle cx="22" cy="32" r="6" fill="#5a3010" opacity="0.8"/>
+      <circle cx="58" cy="32" r="11" fill="#7a4a22"/>
+      <circle cx="58" cy="32" r="6" fill="#5a3010" opacity="0.8"/>
+      <!-- muzzle -->
+      <ellipse cx="40" cy="62" rx="14" ry="10" fill="#9a6a3a"/>
+      <!-- eyes -->
+      <ellipse cx="30" cy="48" rx="5" ry="5" fill="#2a1800"/>
+      <ellipse cx="50" cy="48" rx="5" ry="5" fill="#2a1800"/>
+      <circle cx="28.5" cy="46.5" r="1.8" fill="white" opacity="0.7"/>
+      <circle cx="48.5" cy="46.5" r="1.8" fill="white" opacity="0.7"/>
+      <!-- nose -->
+      <ellipse cx="40" cy="60" rx="7" ry="5" fill="#2a1000"/>
+      <ellipse cx="40" cy="61" rx="5" ry="3" fill="#1a0800" opacity="0.8"/>
+      <!-- mouth -->
+      <path d="M34,65 Q40,70 46,65" stroke="#5a2c10" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <!-- paws front -->
+      <ellipse cx="28" cy="102" rx="12" ry="8" fill="#7a4a22"/>
+      <ellipse cx="28" cy="98" rx="8" ry="6" fill="#6a3a15"/>
+      <!-- claws front -->
+      <path d="M22,104 Q20,110 21,112" stroke="#3a2010" stroke-width="2" stroke-linecap="round"/>
+      <path d="M26,106 Q25,112 26,114" stroke="#3a2010" stroke-width="2" stroke-linecap="round"/>
+      <path d="M30,106 Q30,112 31,114" stroke="#3a2010" stroke-width="2" stroke-linecap="round"/>
+      <path d="M34,104 Q34,110 35,112" stroke="#3a2010" stroke-width="2" stroke-linecap="round"/>
+      <!-- back paws -->
+      <ellipse cx="90" cy="106" rx="14" ry="8" fill="#7a4a22"/>
+      <ellipse cx="90" cy="102" rx="10" ry="6" fill="#6a3a15"/>
+      <!-- legs -->
+      <rect x="57" y="100" width="12" height="16" fill="#7a4a22" rx="5"/>
+      <rect x="80" y="100" width="12" height="16" fill="#7a4a22" rx="5"/>
+      <!-- tail tiny -->
+      <ellipse cx="100" cy="80" rx="5" ry="4" fill="#6a3a15"/>
+    </svg>`
+  },
+  { name: 'Firefly', emoji: '✨', status: 'Varies', statusClass: 'status-vulnerable',
+    habitat: 'Forest/Meadow', population: 'Declining', lifespan: '~2 months', timeOfDay: 'night',
+    desc: 'Fireflies are nature\'s living lanterns, producing cold light through bioluminescence to attract mates. Each species flashes in unique patterns. Their populations are declining due to light pollution and habitat loss.',
+    cardDesc: 'Bioluminescent night jewels of the forest. Each species has a unique flash code.',
+    bio: 'Fireflies produce light through a chemical reaction involving luciferin and oxygen. Males flash to attract females who respond from the grass. Over 2,000 species exist worldwide, each with distinct flash patterns and intervals.',
+    stats: { Flash: 'Unique/species', Light: 'Cold photons', Range: 'Worldwide', Diet: 'Omnivore' },
+    bgColor: 'linear-gradient(135deg,rgba(8,20,8,0.7),rgba(4,10,4,0.95))',
+    svgIllustration: `<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+      <!-- glow clusters in background -->
+      <circle cx="20" cy="30" r="6" fill="#88ff44" opacity="0.15"/>
+      <circle cx="95" cy="25" r="5" fill="#88ff44" opacity="0.12"/>
+      <circle cx="110" cy="70" r="7" fill="#88ff44" opacity="0.1"/>
+      <circle cx="15" cy="85" r="5" fill="#88ff44" opacity="0.12"/>
+      <!-- main firefly body -->
+      <!-- wings -->
+      <ellipse cx="45" cy="52" rx="22" ry="10" fill="#3a5a2a" opacity="0.7" transform="rotate(-20,45,52)"/>
+      <ellipse cx="75" cy="52" rx="22" ry="10" fill="#3a5a2a" opacity="0.7" transform="rotate(20,75,52)"/>
+      <!-- wing veins -->
+      <path d="M38,48 Q45,55 52,50" stroke="#5a8a4a" stroke-width="1" fill="none" opacity="0.5"/>
+      <path d="M68,48 Q75,55 82,50" stroke="#5a8a4a" stroke-width="1" fill="none" opacity="0.5"/>
+      <!-- thorax -->
+      <ellipse cx="60" cy="55" rx="10" ry="12" fill="#3a4a28"/>
+      <!-- abdomen — GLOWING -->
+      <ellipse cx="60" cy="72" rx="9" ry="16" fill="#2a3a18"/>
+      <!-- glow segment -->
+      <ellipse cx="60" cy="82" rx="8" ry="8" fill="#88ff44" opacity="0.9"/>
+      <ellipse cx="60" cy="82" rx="12" ry="12" fill="#88ff44" opacity="0.4"/>
+      <ellipse cx="60" cy="82" rx="18" ry="18" fill="#88ff44" opacity="0.15"/>
+      <ellipse cx="60" cy="82" rx="26" ry="26" fill="#88ff44" opacity="0.06"/>
+      <!-- head -->
+      <ellipse cx="60" cy="44" rx="9" ry="8" fill="#3a4a28"/>
+      <!-- compound eyes -->
+      <ellipse cx="53" cy="42" rx="5" ry="5" fill="#88ff44" opacity="0.8"/>
+      <ellipse cx="67" cy="42" rx="5" ry="5" fill="#88ff44" opacity="0.8"/>
+      <ellipse cx="53" cy="42" rx="3" ry="3" fill="#1a2010"/>
+      <ellipse cx="67" cy="42" rx="3" ry="3" fill="#1a2010"/>
+      <!-- antennae -->
+      <path d="M55,38 Q50,28 46,24" stroke="#3a4a28" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+      <path d="M65,38 Q70,28 74,24" stroke="#3a4a28" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+      <circle cx="46" cy="24" r="2" fill="#3a4a28"/>
+      <circle cx="74" cy="24" r="2" fill="#3a4a28"/>
+      <!-- legs -->
+      <path d="M52,58 Q44,62 38,66" stroke="#3a4a28" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <path d="M52,64 Q44,66 38,72" stroke="#3a4a28" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <path d="M68,58 Q76,62 82,66" stroke="#3a4a28" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <path d="M68,64 Q76,66 82,72" stroke="#3a4a28" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <!-- floating glow dots (other fireflies) -->
+      <circle cx="18" cy="35" r="4" fill="#88ff44" opacity="0.7"/>
+      <circle cx="18" cy="35" r="8" fill="#88ff44" opacity="0.2"/>
+      <circle cx="96" cy="28" r="3.5" fill="#88ff44" opacity="0.6"/>
+      <circle cx="96" cy="28" r="7" fill="#88ff44" opacity="0.15"/>
+      <circle cx="108" cy="72" r="4" fill="#88ff44" opacity="0.65"/>
+      <circle cx="108" cy="72" r="9" fill="#88ff44" opacity="0.15"/>
+      <circle cx="14" cy="88" r="3" fill="#88ff44" opacity="0.55"/>
+    </svg>`
+  }
+];
+
+// ======================== ORBIT LAYOUT ========================
+function buildOrbit() {
+  const container = document.getElementById('orbitContainer');
+  const size = container.offsetWidth;
+  const radius = size * 0.38;
+  const center = size / 2;
+
+  animals.forEach((animal, i) => {
+    const angle = (i / animals.length) * Math.PI * 2 - Math.PI / 2;
+    const x = center + radius * Math.cos(angle);
+    const y = center + radius * Math.sin(angle);
+
+    const node = document.createElement('div');
+    node.className = 'animal-node';
+    node.style.cssText = `left: ${x - 45}px; top: ${y - 45}px;`;
+    node.innerHTML = `
+      <div class="animal-node-inner">
+        <div style="width:48px;height:48px;display:flex;align-items:center;justify-content:center;">${animal.svgIllustration.replace('viewBox="0 0 120 120"', 'viewBox="0 0 120 120" width="48" height="48"')}</div>
+        <span class="animal-label">${animal.name}</span>
+      </div>
+    `;
+    node.addEventListener('click', () => openInfoPanel(i));
+    container.appendChild(node);
+  });
+}
+buildOrbit();
+
+function openInfoPanel(i) {
+  const a = animals[i];
+  const emojiEl = document.getElementById('infoPanelEmoji');
+  emojiEl.innerHTML = a.svgIllustration.replace('viewBox="0 0 120 120"', 'viewBox="0 0 120 120" width="80" height="80"');
+  document.getElementById('infoPanelName').textContent = a.name;
+  const status = document.getElementById('infoPanelStatus');
+  status.textContent = a.status;
+  status.className = 'info-panel-status ' + a.statusClass;
+  document.getElementById('infoPanelHabitat').textContent = a.habitat;
+  document.getElementById('infoPanelPop').textContent = a.population;
+  document.getElementById('infoPanelLife').textContent = a.lifespan;
+  document.getElementById('infoPanelDesc').textContent = a.desc;
+  document.getElementById('infoPanel').classList.add('open');
+}
+function closeInfoPanel() {
+  document.getElementById('infoPanel').classList.remove('open');
+}
+
+// ======================== DAY / NIGHT STATE ========================
+let isNightMode = false;
+
+function toggleDayNight() {
+  isNightMode = !isNightMode;
+  const toggle = document.getElementById('daynightToggle');
+  const knob = document.getElementById('toggleKnob');
+  const dayLabel = document.getElementById('dayLabel');
+  const nightLabel = document.getElementById('nightLabel');
+  const modeIndicator = document.getElementById('modeIndicator');
+  const cardsSection = document.getElementById('cards');
+
+  if (isNightMode) {
+    toggle.className = 'toggle-track night-mode';
+    knob.textContent = '🌙';
+    dayLabel.classList.remove('active');
+    nightLabel.classList.add('active');
+    modeIndicator.className = 'mode-indicator night';
+    modeIndicator.innerHTML = '🌙 &nbsp;Showing Night Animals';
+    cardsSection.classList.remove('day-mode-active');
+    cardsSection.style.background = 'radial-gradient(ellipse 120% 60% at 50% 100%, rgba(20,25,60,0.3) 0%, var(--jungle-deep) 70%)';
+  } else {
+    toggle.className = 'toggle-track day-mode';
+    knob.textContent = '☀️';
+    dayLabel.classList.add('active');
+    nightLabel.classList.remove('active');
+    modeIndicator.className = 'mode-indicator day';
+    modeIndicator.innerHTML = '☀️ &nbsp;Showing Day Animals';
+    cardsSection.classList.add('day-mode-active');
+    cardsSection.style.background = '';
+  }
+  renderCards();
+}
+
+// ======================== CARDS GRID ========================
+const cardsGrid = document.getElementById('cardsGrid');
+
+function renderCards() {
+  const mode = isNightMode ? 'night' : 'day';
+  const filtered = animals.filter(a => a.timeOfDay === mode);
+
+  cardsGrid.innerHTML = '';
+  filtered.forEach((a, i) => {
+    const card = document.createElement('div');
+    card.className = `animal-card scroll-reveal ${mode}-card`;
+    card.style.transitionDelay = (i * 80) + 'ms';
+    card.style.background = a.bgColor;
+
+    // illustration background
+    const illBgColor = isNightMode
+      ? `radial-gradient(ellipse at 50% 30%, rgba(30,40,80,0.5) 0%, transparent 70%)`
+      : `radial-gradient(ellipse at 50% 30%, rgba(60,90,30,0.3) 0%, transparent 70%)`;
+
+    card.innerHTML = `
+      <div class="card-status-badge ${a.statusClass}">${a.status}</div>
+      <div class="card-illustration">
+        <div class="card-illustration-bg" style="background:${illBgColor}"></div>
+        ${a.svgIllustration}
+      </div>
+      <div class="card-title">${a.name}</div>
+      <div class="card-habitat">${a.habitat}</div>
+      <p class="card-desc">${a.cardDesc}</p>
+      <div class="card-arrow">→</div>
+    `;
+    card.addEventListener('mousemove', e => {
+      const rect = card.getBoundingClientRect();
+      const cx = (e.clientX - rect.left) / rect.width * 100;
+      const cy = (e.clientY - rect.top) / rect.height * 100;
+      const rx = ((cy - 50) / 50) * 6;
+      const ry = ((cx - 50) / 50) * -6;
+      card.style.setProperty('--mx', cx + '%');
+      card.style.setProperty('--my', cy + '%');
+      card.style.setProperty('--rx', rx + 'deg');
+      card.style.setProperty('--ry', ry + 'deg');
+    });
+    card.addEventListener('mouseleave', () => {
+      card.style.setProperty('--rx', '0deg');
+      card.style.setProperty('--ry', '0deg');
+    });
+    // find original index for modal
+    const origIdx = animals.findIndex(an => an.name === a.name);
+    card.addEventListener('click', () => openModal(origIdx));
+    cardsGrid.appendChild(card);
+    // trigger scroll reveal
+    setTimeout(() => card.classList.add('visible'), 50 + i * 80);
+  });
+}
+
+renderCards();
+
+// ======================== MODAL ========================
+function openModal(i) {
+  const a = animals[i];
+  const iconEl = document.getElementById('modalIcon');
+  iconEl.innerHTML = a.svgIllustration.replace('viewBox="0 0 120 120"', 'viewBox="0 0 120 120" width="100" height="100"');
+  document.getElementById('modalTitle').textContent = a.name;
+  document.getElementById('modalSubtitle').textContent = a.habitat + ' · ' + a.status;
+  document.getElementById('modalBody').textContent = a.bio;
+  const statsEl = document.getElementById('modalStats');
+  statsEl.innerHTML = Object.entries(a.stats).map(([k,v]) => `
+    <div class="modal-stat">
+      <div class="modal-stat-key">${k}</div>
+      <div class="modal-stat-val">${v}</div>
+    </div>
+  `).join('');
+  document.getElementById('modalOverlay').classList.add('open');
+}
+function closeModal(e) {
+  if (!e || e.target === document.getElementById('modalOverlay') || e.currentTarget.classList.contains('modal-close')) {
+    document.getElementById('modalOverlay').classList.remove('open');
+  }
+}
+
+// ======================== HABITAT CUBE ========================
+const habitats = {
+  Forest: { icon: '🌲', desc: 'Temperate and boreal forests cover ~30% of Earth\'s land surface. Home to bears, deer, wolves, and thousands of bird species. These ecosystems regulate climate and water cycles.' },
+  Desert: { icon: '🏜️', desc: 'Deserts cover ~33% of land area yet host remarkable life adapted to extreme heat and water scarcity. Fennec foxes, sidewinder snakes, and roadrunners thrive in these harsh environments.' },
+  Ocean: { icon: '🌊', desc: 'Covering 71% of Earth\'s surface, oceans hold 97% of the planet\'s water and harbor the vast majority of biodiversity. From blue whales to microscopic plankton, marine life is extraordinary.' },
+  Arctic: { icon: '🧊', desc: 'The polar regions are among Earth\'s most extreme environments. Polar bears, arctic foxes, and narwhals have evolved remarkable adaptations to survive frigid temperatures and seasonal darkness.' },
+  Mountains: { icon: '⛰️', desc: 'Mountain ecosystems host unique biodiversity adapted to altitude, cold, and thin air. Snow leopards, golden eagles, and mountain gorillas occupy these sky-high realms.' },
+  Jungle: { icon: '🌿', desc: 'Tropical rainforests contain over 50% of the world\'s plant and animal species in just 6% of land area. They are the most biodiverse ecosystems on Earth — the lungs of our planet.' }
+};
+
+const cube = document.getElementById('cube');
+const cubeScene = document.getElementById('cubeScene');
+
+cubeScene.addEventListener('mouseenter', () => cube.classList.add('paused'));
+cubeScene.addEventListener('mouseleave', () => {
+  cube.classList.remove('paused');
+  document.getElementById('habitatName').textContent = 'Hover or click a face';
+  document.getElementById('habitatDesc').textContent = 'Rotate the cube to explore different animal habitats around the world.';
+});
+
+document.querySelectorAll('.cube-face').forEach(face => {
+  const label = face.querySelector('.cube-face-label').textContent;
+  face.addEventListener('click', () => {
+    const h = habitats[label];
+    document.getElementById('habitatName').textContent = label;
+    document.getElementById('habitatDesc').textContent = h.desc;
+  });
+  face.addEventListener('mouseenter', () => {
+    const h = habitats[label];
+    document.getElementById('habitatName').textContent = label;
+    document.getElementById('habitatDesc').textContent = h.desc;
+  });
+});
+
+// ======================== GALLERY ========================
+const gallerySlides = [
+  { animalIdx: 0, title: 'The Lion King', sub: 'Masai Mara, Kenya', color: '#1a2008' },
+  { animalIdx: 1, title: 'Bengal Tiger', sub: 'Sundarbans, India', color: '#1a1208' },
+  { animalIdx: 2, title: 'African Giant', sub: 'Amboseli, Kenya', color: '#10181a' },
+  { animalIdx: 3, title: 'Eagle\'s Dominion', sub: 'Rocky Mountains, USA', color: '#0d1520' },
+  { animalIdx: 7, title: 'Forest Guardian', sub: 'Kamchatka, Russia', color: '#121808' },
+  { animalIdx: 6, title: 'Morning Grace', sub: 'Yellowstone, USA', color: '#12180a' },
+];
+
+const track = document.getElementById('galleryTrack');
+const dotsEl = document.getElementById('galleryDots');
+let galleryIndex = 0, galleryAuto;
+
+gallerySlides.forEach((s, i) => {
+  const a = animals[s.animalIdx] || animals[i % animals.length];
+  const slide = document.createElement('div');
+  slide.className = 'gallery-slide';
+  slide.style.background = `radial-gradient(ellipse at 50% 30%, ${s.color} 0%, #060e04 100%)`;
+  const bgSvg = a.svgIllustration.replace('viewBox="0 0 120 120"', 'viewBox="0 0 120 120" width="220" height="220"').replace(/opacity="[\d.]+"/g, 'opacity="0.12"');
+  const fgSvg = a.svgIllustration.replace('viewBox="0 0 120 120"', 'viewBox="0 0 120 120" width="160" height="160"');
+  slide.innerHTML = `
+    <div class="gallery-slide-bg">${bgSvg}</div>
+    <div class="gallery-slide-content">
+      <div class="gallery-slide-icon" style="filter:drop-shadow(0 0 30px rgba(201,168,76,0.4))">${fgSvg}</div>
+      <div class="gallery-slide-title">${s.title}</div>
+      <div class="gallery-slide-sub">${s.sub}</div>
+    </div>
+  `;
+  track.appendChild(slide);
+
+  const dot = document.createElement('div');
+  dot.className = 'gallery-dot' + (i === 0 ? ' active' : '');
+  dot.onclick = () => goToSlide(i);
+  dotsEl.appendChild(dot);
+});
+
+function goToSlide(n) {
+  galleryIndex = (n + gallerySlides.length) % gallerySlides.length;
+  track.style.transform = `translateX(-${galleryIndex * 100}%)`;
+  dotsEl.querySelectorAll('.gallery-dot').forEach((d, i) =>
+    d.classList.toggle('active', i === galleryIndex));
+}
+function galleryNext() { goToSlide(galleryIndex + 1); }
+function galleryPrev() { goToSlide(galleryIndex - 1); }
+
+function startGalleryAuto() { galleryAuto = setInterval(galleryNext, 4000); }
+function stopGalleryAuto() { clearInterval(galleryAuto); }
+
+const galleryContainer = document.getElementById('galleryContainer');
+galleryContainer.addEventListener('mouseenter', stopGalleryAuto);
+galleryContainer.addEventListener('mouseleave', startGalleryAuto);
+startGalleryAuto();
+
+// ======================== LEAVES ========================
+const leavesContainer = document.getElementById('leavesContainer');
+const leafEmojis = ['🍂', '🍃', '🌿', '🍁'];
+for (let i = 0; i < 20; i++) {
+  const leaf = document.createElement('div');
+  leaf.className = 'leaf';
+  leaf.textContent = leafEmojis[Math.floor(Math.random() * leafEmojis.length)];
+  leaf.style.cssText = `
+    left: ${Math.random() * 100}%;
+    --size: ${0.8 + Math.random() * 1.5}rem;
+    --dur: ${8 + Math.random() * 12}s;
+    --delay: ${Math.random() * 10}s;
+    --drift: ${(Math.random() - 0.5) * 300}px;
+    --rot: ${(Math.random() - 0.5) * 720}deg;
+  `;
+  leavesContainer.appendChild(leaf);
+}
+
+// ======================== GLOBE — 2D Canvas, Real Projection ========================
+const globeAnimalData = {
+  Lion:    { color:'#ffaa22', countries:[
+    {name:'Tanzania',    flag:'🇹🇿',lat:-6,  lon:35,  pop:'~8,000',   status:'Vulnerable'},
+    {name:'Botswana',    flag:'🇧🇼',lat:-22, lon:24,  pop:'~3,000',   status:'Vulnerable'},
+    {name:'Kenya',       flag:'🇰🇪',lat:0,   lon:38,  pop:'~2,500',   status:'Vulnerable'},
+    {name:'South Africa',flag:'🇿🇦',lat:-29, lon:26,  pop:'~2,000',   status:'Vulnerable'},
+    {name:'Zimbabwe',    flag:'🇿🇼',lat:-20, lon:30,  pop:'~1,500',   status:'Endangered'},
+  ]},
+  Tiger:   { color:'#ff6622', countries:[
+    {name:'India',       flag:'🇮🇳',lat:22,  lon:80,  pop:'~3,167',   status:'Endangered'},
+    {name:'Russia',      flag:'🇷🇺',lat:49,  lon:133, pop:'~500',     status:'Endangered'},
+    {name:'Indonesia',   flag:'🇮🇩',lat:-2,  lon:117, pop:'~400',     status:'Critically End.'},
+    {name:'Nepal',       flag:'🇳🇵',lat:28,  lon:84,  pop:'~355',     status:'Endangered'},
+    {name:'Malaysia',    flag:'🇲🇾',lat:4,   lon:109, pop:'~150',     status:'Critically End.'},
+  ]},
+  Elephant:{ color:'#88aacc', countries:[
+    {name:'Botswana',    flag:'🇧🇼',lat:-22, lon:24,  pop:'~130,000', status:'Vulnerable'},
+    {name:'Zimbabwe',    flag:'🇿🇼',lat:-20, lon:30,  pop:'~100,000', status:'Vulnerable'},
+    {name:'Tanzania',    flag:'🇹🇿',lat:-6,  lon:35,  pop:'~60,000',  status:'Vulnerable'},
+    {name:'Kenya',       flag:'🇰🇪',lat:0,   lon:38,  pop:'~35,000',  status:'Vulnerable'},
+    {name:'India',       flag:'🇮🇳',lat:22,  lon:80,  pop:'~27,000',  status:'Endangered'},
+  ]},
+  Eagle:   { color:'#ddee44', countries:[
+    {name:'USA',         flag:'🇺🇸',lat:40,  lon:-100,pop:'~316,700', status:'Least Concern'},
+    {name:'Canada',      flag:'🇨🇦',lat:55,  lon:-100,pop:'~150,000', status:'Least Concern'},
+    {name:'Russia',      flag:'🇷🇺',lat:58,  lon:80,  pop:'~70,000',  status:'Least Concern'},
+    {name:'Ethiopia',    flag:'🇪🇹',lat:9,   lon:40,  pop:'~5,000',   status:'Endangered'},
+    {name:'Spain',       flag:'🇪🇸',lat:40,  lon:-4,  pop:'~600',     status:'Vulnerable'},
+  ]},
+  Bear:    { color:'#cc8844', countries:[
+    {name:'Russia',      flag:'🇷🇺',lat:58,  lon:80,  pop:'~100,000', status:'Least Concern'},
+    {name:'USA',         flag:'🇺🇸',lat:44,  lon:-113,pop:'~55,000',  status:'Least Concern'},
+    {name:'Canada',      flag:'🇨🇦',lat:55,  lon:-121,pop:'~25,000',  status:'Least Concern'},
+    {name:'Romania',     flag:'🇷🇴',lat:46,  lon:25,  pop:'~6,000',   status:'Least Concern'},
+    {name:'Norway',      flag:'🇳🇴',lat:65,  lon:13,  pop:'~150',     status:'Vulnerable'},
+  ]},
+  Deer:    { color:'#88cc66', countries:[
+    {name:'USA',         flag:'🇺🇸',lat:40,  lon:-97, pop:'~30M',     status:'Least Concern'},
+    {name:'China',       flag:'🇨🇳',lat:36,  lon:104, pop:'~5M',      status:'Least Concern'},
+    {name:'Russia',      flag:'🇷🇺',lat:58,  lon:60,  pop:'~4M',      status:'Least Concern'},
+    {name:'Brazil',      flag:'🇧🇷',lat:-15, lon:-52, pop:'~3M',      status:'Least Concern'},
+    {name:'Argentina',   flag:'🇦🇷',lat:-35, lon:-65, pop:'~2M',      status:'Least Concern'},
+  ]},
+  Wolf:    { color:'#aabbee', countries:[
+    {name:'Russia',      flag:'🇷🇺',lat:58,  lon:60,  pop:'~45,000',  status:'Least Concern'},
+    {name:'Canada',      flag:'🇨🇦',lat:55,  lon:-100,pop:'~60,000',  status:'Least Concern'},
+    {name:'USA',         flag:'🇺🇸',lat:44,  lon:-110,pop:'~6,000',   status:'Least Concern'},
+    {name:'Mongolia',    flag:'🇲🇳',lat:47,  lon:103, pop:'~10,000',  status:'Least Concern'},
+    {name:'Poland',      flag:'🇵🇱',lat:52,  lon:20,  pop:'~2,500',   status:'Least Concern'},
+  ]},
+  Gorilla: { color:'#66aa88', countries:[
+    {name:'DR Congo',    flag:'🇨🇩',lat:-2,  lon:24,  pop:'~100,000', status:'Endangered'},
+    {name:'Uganda',      flag:'🇺🇬',lat:1,   lon:32,  pop:'~459',     status:'Endangered'},
+    {name:'Rwanda',      flag:'🇷🇼',lat:-2,  lon:30,  pop:'~604',     status:'Endangered'},
+    {name:'Cameroon',    flag:'🇨🇲',lat:4,   lon:12,  pop:'~250',     status:'Critically End.'},
+    {name:'Gabon',       flag:'🇬🇦',lat:-1,  lon:12,  pop:'~40,000',  status:'Endangered'},
+  ]},
+  Cheetah: { color:'#ffdd44', countries:[
+    {name:'Namibia',     flag:'🇳🇦',lat:-22, lon:18,  pop:'~1,500',   status:'Vulnerable'},
+    {name:'Botswana',    flag:'🇧🇼',lat:-22, lon:24,  pop:'~1,300',   status:'Vulnerable'},
+    {name:'Zimbabwe',    flag:'🇿🇼',lat:-20, lon:30,  pop:'~400',     status:'Vulnerable'},
+    {name:'Tanzania',    flag:'🇹🇿',lat:-6,  lon:35,  pop:'~600',     status:'Vulnerable'},
+    {name:'Iran',        flag:'🇮🇷',lat:32,  lon:54,  pop:'~40',      status:'Critically End.'},
+  ]},
+  Panda:   { color:'#eeeedd', countries:[
+    {name:'China (Sichuan)',flag:'🇨🇳',lat:30, lon:103,pop:'~758',    status:'Vulnerable'},
+    {name:'China (Shaanxi)',flag:'🇨🇳',lat:34, lon:108,pop:'~345',    status:'Vulnerable'},
+    {name:'China (Gansu)', flag:'🇨🇳',lat:36, lon:102,pop:'~132',    status:'Vulnerable'},
+    {name:'Japan (Zoo)',   flag:'🇯🇵',lat:36, lon:138,pop:'~13',     status:'Captive'},
+    {name:'USA (Zoo)',     flag:'🇺🇸',lat:39, lon:-77, pop:'~12',     status:'Captive'},
+  ]},
+  Penguin: { color:'#44aadd', countries:[
+    {name:'Antarctica',  flag:'❄️', lat:-75, lon:0,   pop:'~5M',      status:'Least Concern'},
+    {name:'Argentina',   flag:'🇦🇷',lat:-50, lon:-70, pop:'~1.5M',    status:'Least Concern'},
+    {name:'New Zealand', flag:'🇳🇿',lat:-41, lon:174, pop:'~1M',      status:'Least Concern'},
+    {name:'South Africa',flag:'🇿🇦',lat:-34, lon:18,  pop:'~50,000',  status:'Endangered'},
+    {name:'Chile',       flag:'🇨🇱',lat:-45, lon:-73, pop:'~600K',    status:'Near Threatened'},
+  ]},
+  Whale:   { color:'#3388ff', countries:[
+    {name:'Norway',      flag:'🇳🇴',lat:70,  lon:15,  pop:'~110,000', status:'Least Concern'},
+    {name:'USA (Alaska)',flag:'🇺🇸',lat:60,  lon:-153,pop:'~80,000',  status:'Least Concern'},
+    {name:'Australia',   flag:'🇦🇺',lat:-32, lon:152, pop:'~40,000',  status:'Least Concern'},
+    {name:'Iceland',     flag:'🇮🇸',lat:65,  lon:-18, pop:'~40,000',  status:'Least Concern'},
+    {name:'Japan',       flag:'🇯🇵',lat:35,  lon:137, pop:'~27,000',  status:'Endangered'},
+  ]},
+};
+
+// ======================== GLOBE — Full World Map 3D Sphere ========================
+(function initGlobe() {
+  const SIZE = 560, R = 256;
+  const canvas = document.getElementById('globe-canvas');
+  canvas.width = SIZE; canvas.height = SIZE;
+  canvas.style.width = '480px'; canvas.style.height = '480px';
+  const ctx = canvas.getContext('2d');
+  const CX = SIZE / 2, CY = SIZE / 2;
+
+  let rotY = 0.0, rotX = 0.1;
+  let velY = 0.004, velX = 0;
+  let drag = false, px = 0, py = 0, t = 0;
+  let activeDots = [], activeColor = '#c9a84c';
+
+  /* ---- FULL WORLD MAP POLYGONS [lon, lat] ---- */
+  const lands = [
+    // ===== NORTH AMERICA =====
+    { name:'North America', pts:[
+      [-168,72],[-163,63],[-166,60],[-162,58],[-158,56],[-152,58],[-148,60],[-144,60],[-141,60],
+      [-137,58],[-135,57],[-133,54],[-130,54],[-126,49],[-124,48],[-124,40],[-122,37],[-117,32],
+      [-114,22],[-105,21],[-96,19],[-85,15],[-82,9],[-77,7],[-76,8],[-77,9],[-83,10],[-85,15],
+      [-90,16],[-90,18],[-88,15],[-83,14],[-83,10],[-76,8],[-77,7],[-78,8],[-80,8],[-82,8],
+      [-83,10],[-85,15],[-90,15],[-92,16],[-90,20],[-97,22],[-97,26],[-93,30],[-88,30],[-85,30],
+      [-81,26],[-80,25],[-75,25],[-75,28],[-76,34],[-75,38],[-70,42],[-67,44],[-66,45],[-60,46],
+      [-53,47],[-56,47],[-60,50],[-64,47],[-67,44],[-70,42],[-75,44],[-79,44],[-82,46],[-84,46],
+      [-87,47],[-90,46],[-92,47],[-96,49],[-100,49],[-110,49],[-120,49],[-124,49],[-126,50],
+      [-130,56],[-136,58],[-140,60],[-142,60],[-148,60],[-152,58],[-158,58],[-162,60],[-165,62],
+      [-168,66],[-168,72]
+    ]},
+    // Alaska panhandle extra
+    { name:'Alaska', pts:[
+      [-168,72],[-162,64],[-166,62],[-170,63],[-174,58],[-178,52],[-180,52],[-180,56],
+      [-176,62],[-172,65],[-168,66],[-166,68],[-163,69],[-160,70],[-156,72],[-150,72],
+      [-144,70],[-141,60],[-144,60],[-148,62],[-152,60],[-156,60],[-160,60],[-163,57],
+      [-168,56],[-166,62],[-168,72]
+    ]},
+    { name:'Greenland', pts:[
+      [-44,83],[-22,83],[-18,78],[-20,74],[-22,70],[-26,68],[-32,65],[-40,65],[-44,66],
+      [-50,68],[-52,70],[-52,74],[-48,78],[-44,83]
+    ]},
+    { name:'Cuba+Caribbean', pts:[[-74,20],[-72,20],[-70,19],[-74,18],[-77,18],[-77,20],[-74,20]]},
+
+    // ===== SOUTH AMERICA =====
+    { name:'South America', pts:[
+      [-80,8],[-76,4],[-76,2],[-74,-2],[-73,-5],[-68,-5],[-64,-5],[-60,-4],[-52,-4],[-50,-1],
+      [-50,-5],[-35,-5],[-35,-8],[-37,-12],[-38,-15],[-39,-18],[-41,-20],[-43,-23],[-44,-23],
+      [-45,-24],[-48,-28],[-50,-30],[-52,-33],[-53,-34],[-56,-38],[-58,-42],[-62,-42],
+      [-65,-46],[-66,-50],[-68,-55],[-70,-52],[-72,-50],[-75,-42],[-72,-30],[-70,-18],
+      [-75,-14],[-77,-8],[-80,-3],[-78,2],[-76,4],[-80,8]
+    ]},
+
+    // ===== EUROPE =====
+    { name:'Europe', pts:[
+      [-9,36],[-6,36],[0,37],[5,37],[8,37],[12,37],[15,38],[16,40],[15,42],[14,44],[13,44],
+      [7,44],[6,44],[3,43],[3,44],[1,44],[-2,44],[-4,44],[-5,48],[0,50],[2,51],[2,53],
+      [5,53],[8,55],[10,55],[12,56],[15,57],[18,57],[20,58],[22,60],[24,60],[26,60],
+      [28,56],[24,54],[22,54],[18,55],[15,57],[12,56],[10,55],[8,55],[5,53],[2,51],
+      [0,51],[-2,51],[-5,50],[-5,48],[0,44],[3,43],[8,44],[14,44],[16,41],[15,38],[12,37],
+      [8,37],[5,37],[0,37],[-5,36],[-9,36]
+    ]},
+    { name:'UK', pts:[[0,51],[2,52],[1,54],[-2,57],[-4,58],[-6,58],[-6,55],[-4,54],[-3,52],[-2,51],[0,51]]},
+    { name:'Ireland', pts:[[-6,52],[-8,54],[-10,54],[-10,52],[-8,51],[-6,52]]},
+    { name:'Iceland', pts:[[-24,64],[-14,64],[-13,66],[-18,67],[-24,66],[-24,64]]},
+    { name:'Scandinavia', pts:[
+      [5,57],[8,58],[11,56],[14,57],[16,58],[18,60],[20,60],[22,60],[24,64],[26,70],
+      [28,72],[22,71],[18,70],[14,70],[10,70],[8,66],[5,63],[5,57]
+    ]},
+    { name:'Norway-north', pts:[[14,70],[18,70],[22,71],[28,72],[30,70],[26,68],[22,68],[18,68],[14,70]]},
+
+    // ===== RUSSIA =====
+    { name:'Russia', pts:[
+      [28,56],[32,56],[36,55],[40,52],[44,50],[48,46],[50,45],[55,44],[60,44],[65,52],
+      [68,54],[72,55],[76,55],[80,55],[84,53],[88,52],[92,50],[96,52],[100,52],[104,52],
+      [108,54],[112,53],[116,52],[120,52],[124,52],[128,50],[132,48],[134,46],[136,48],
+      [138,48],[140,46],[142,47],[145,48],[148,46],[150,48],[154,50],[158,52],[160,54],
+      [160,60],[158,60],[154,58],[150,60],[148,60],[144,60],[140,60],[136,58],[132,56],
+      [128,52],[124,52],[120,52],[116,52],[112,54],[108,56],[104,56],[100,54],[96,54],
+      [92,52],[88,54],[84,56],[80,58],[76,58],[72,58],[68,58],[64,56],[60,58],[56,58],
+      [52,56],[48,50],[44,50],[40,52],[36,58],[32,60],[28,60],[28,56]
+    ]},
+    { name:'Russia-north', pts:[
+      [60,68],[68,70],[76,72],[80,73],[88,73],[96,73],[100,72],[108,72],[116,72],[124,72],
+      [132,70],[140,72],[148,72],[160,68],[162,64],[160,60],[154,58],[148,60],[140,60],
+      [132,56],[124,52],[116,52],[108,54],[100,52],[92,52],[88,54],[80,58],[72,58],
+      [64,56],[60,58],[56,60],[56,68],[60,68]
+    ]},
+    { name:'Kamchatka', pts:[[160,56],[162,56],[164,58],[163,60],[161,62],[160,60],[158,58],[160,56]]},
+
+    // ===== ASIA =====
+    { name:'Middle East + Central Asia', pts:[
+      [28,38],[32,37],[36,37],[40,37],[44,38],[46,40],[48,40],[50,38],[52,36],[54,36],
+      [56,38],[60,38],[62,38],[64,36],[68,36],[70,34],[72,34],[72,36],[74,36],[76,34],
+      [76,30],[72,24],[66,22],[60,22],[56,20],[50,20],[44,22],[42,22],[40,18],[42,16],
+      [44,14],[42,12],[38,12],[36,14],[38,18],[36,20],[34,20],[32,22],[32,28],[34,30],
+      [36,34],[38,36],[40,38],[44,38],[48,40],[52,36],[56,38],[60,38],[64,36],[68,36],
+      [72,34],[76,30],[76,26],[72,22],[68,18],[64,18],[60,18],[56,18],[52,16],[48,16],
+      [44,16],[40,16],[38,18],[36,22],[32,24],[30,28],[28,32],[28,38]
+    ]},
+    { name:'India', pts:[
+      [72,24],[76,24],[80,28],[84,28],[88,26],[92,22],[90,18],[86,16],[80,12],[76,8],
+      [74,16],[68,22],[68,24],[72,24]
+    ]},
+    { name:'China+SEA', pts:[
+      [76,36],[80,36],[84,28],[88,28],[92,28],[96,28],[100,26],[104,24],[108,22],[112,22],
+      [116,24],[120,28],[124,32],[128,38],[132,42],[134,44],[136,44],[140,42],[140,38],
+      [138,34],[136,34],[132,34],[128,30],[124,26],[120,24],[116,20],[112,18],[108,16],
+      [104,14],[100,16],[96,18],[92,18],[88,22],[84,24],[80,28],[76,28],[74,32],[76,36]
+    ]},
+    { name:'Japan', pts:[[130,32],[132,34],[134,36],[136,38],[140,40],[142,40],[140,38],[138,36],[136,34],[132,34],[130,32]]},
+    { name:'Indonesia-Java', pts:[[106,-8],[108,-8],[110,-8],[112,-8],[114,-8],[116,-8],[114,-6],[110,-6],[106,-7],[106,-8]]},
+    { name:'Indonesia-Sumatra', pts:[[96,4],[98,4],[102,2],[106,0],[106,-4],[104,-4],[100,-2],[96,2],[96,4]]},
+    { name:'Borneo', pts:[[108,0],[112,2],[116,4],[118,4],[118,0],[116,-2],[112,-4],[108,-2],[108,0]]},
+    { name:'Philippines', pts:[[120,16],[122,18],[124,18],[122,16],[120,14],[118,12],[118,10],[120,12],[122,14],[120,16]]},
+    { name:'Korea', pts:[[126,34],[128,36],[130,38],[130,36],[128,34],[126,34]]},
+    { name:'Taiwan', pts:[[120,22],[122,24],[122,22],[120,22]]},
+    { name:'Sri Lanka', pts:[[80,6],[82,8],[80,10],[78,8],[80,6]]},
+
+    // ===== AFRICA =====
+    { name:'Africa', pts:[
+      [-18,15],[-16,12],[-14,10],[-12,8],[-10,6],[-8,4],[-8,2],[-6,2],[-4,4],[-2,4],
+      [0,4],[4,4],[8,4],[8,6],[8,8],[10,8],[10,10],[12,8],[14,4],[14,2],[12,0],
+      [14,-4],[16,-8],[18,-12],[20,-18],[22,-20],[24,-22],[26,-24],[28,-24],[30,-22],
+      [32,-20],[34,-18],[36,-16],[38,-12],[40,-8],[40,-4],[42,0],[42,4],[44,8],[46,10],
+      [48,12],[50,12],[50,10],[50,8],[48,6],[46,2],[44,-2],[44,-8],[46,-14],[44,-18],
+      [42,-22],[40,-26],[38,-30],[36,-34],[34,-34],[32,-30],[28,-24],[26,-20],[24,-18],
+      [22,-16],[20,-14],[18,-12],[16,-8],[14,-4],[12,0],[10,2],[8,4],[4,4],[0,4],
+      [-4,2],[-8,2],[-10,4],[-12,6],[-14,10],[-16,14],[-18,15]
+    ]},
+    { name:'Madagascar', pts:[[44,-12],[46,-16],[48,-20],[46,-22],[44,-20],[42,-16],[44,-12]]},
+
+    // ===== OCEANIA =====
+    { name:'Australia', pts:[
+      [114,-22],[116,-20],[118,-18],[120,-18],[122,-18],[124,-18],[126,-18],[128,-16],
+      [130,-14],[132,-12],[134,-12],[136,-12],[138,-12],[140,-12],[142,-12],[144,-14],
+      [146,-16],[148,-20],[150,-24],[152,-28],[152,-30],[150,-32],[148,-36],[146,-38],
+      [144,-38],[140,-36],[136,-34],[132,-34],[128,-34],[124,-34],[120,-34],[116,-34],
+      [114,-32],[112,-28],[112,-24],[114,-22]
+    ]},
+    { name:'New Zealand N', pts:[[172,-36],[174,-38],[176,-38],[178,-38],[178,-36],[176,-34],[174,-34],[172,-36]]},
+    { name:'New Zealand S', pts:[[168,-44],[170,-46],[172,-46],[174,-44],[172,-42],[170,-42],[168,-44]]},
+    { name:'Papua New Guinea', pts:[[140,-4],[142,-4],[144,-6],[146,-8],[148,-8],[148,-6],[146,-4],[144,-2],[142,-2],[140,-4]]},
+
+    // ===== ANTARCTICA =====
+    { name:'Antarctica', pts:[
+      [-180,-70],[-160,-72],[-140,-72],[-120,-70],[-100,-68],[-80,-70],[-60,-72],
+      [-40,-70],[-20,-70],[0,-68],[20,-70],[40,-72],[60,-70],[80,-68],[100,-70],
+      [120,-72],[140,-70],[160,-68],[180,-70],[180,-90],[-180,-90],[-180,-70]
+    ]},
+
+    // ===== ADDITIONAL ISLANDS/REGIONS =====
+    { name:'Caribbean-Hispaniola', pts:[[-72,18],[-70,18],[-68,20],[-72,20],[-72,18]]},
+    { name:'Cuba', pts:[[-84,22],[-78,22],[-74,20],[-76,20],[-80,22],[-84,22]]},
+    { name:'Cyprus', pts:[[32,34],[34,35],[34,34],[32,34]]},
+    { name:'Caspian-region', pts:[[50,42],[52,44],[54,44],[54,40],[52,38],[50,40],[50,42]]},
+  ];
+
+  /* Country label points [lon, lat, name] */
+  const countryLabels = [
+    [-100,40,'USA'],[-96,60,'Canada'],[-55,-10,'Brazil'],[-65,-35,'Argentina'],
+    [-75,4,'Colombia'],[-78,-2,'Peru'],[-60,-15,'Bolivia'],[3,46,'France'],
+    [10,51,'Germany'],[12,43,'Italy'],[0,40,'Spain'],[20,52,'Poland'],
+    [30,55,'Ukraine'],[40,55,'Russia'],[85,53,'Kazakhstan'],[78,21,'India'],
+    [104,35,'China'],[138,37,'Japan'],[127,37,'Korea'],[100,15,'SE Asia'],
+    [25,3,'DR Congo'],[20,20,'Sudan'],[28,-20,'Zambia'],[25,-30,'S.Africa'],
+    [35,-10,'Tanzania'],[36,1,'Kenya'],[16,11,'Nigeria'],[-2,8,'Ghana'],
+    [34,31,'Egypt'],[45,25,'Saudi'],[53,32,'Iran'],[69,30,'Pakistan'],
+    [91,23,'Bangladesh'],[134,-26,'Australia'],[174,-38,'N.Zealand'],
+    [-25,65,'Greenland'],[-18,65,'Iceland'],[-70,18,'Cuba'],[47,-20,'Madagascar']
+  ];
+
+  /* -- projection helpers -- */
+  function project(lon, lat) {
+    const lo = lon * Math.PI / 180 + rotY;
+    const la = lat * Math.PI / 180;
+    const x = Math.cos(la) * Math.sin(lo);
+    const y = Math.sin(la) * Math.cos(rotX) - Math.cos(la) * Math.cos(lo) * Math.sin(rotX);
+    const z = Math.sin(la) * Math.sin(rotX) + Math.cos(la) * Math.cos(lo) * Math.cos(rotX);
+    return { x: CX + x * R, y: CY - y * R, z };
+  }
+
+  function isVisible(z) { return z > 0; }
+
+  /* -- draw sphere gradient -- */
+  function drawSphere() {
+    // Ocean
+    const grad = ctx.createRadialGradient(CX - R * 0.3, CY - R * 0.3, R * 0.05, CX, CY, R);
+    grad.addColorStop(0, '#1a4a2e');
+    grad.addColorStop(0.4, '#0d2a1a');
+    grad.addColorStop(0.8, '#071510');
+    grad.addColorStop(1, '#030d05');
+    ctx.beginPath();
+    ctx.arc(CX, CY, R, 0, Math.PI * 2);
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Clip to sphere
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(CX, CY, R - 1, 0, Math.PI * 2);
+    ctx.clip();
+  }
+
+  /* -- draw grid lines -- */
+  function drawGrid() {
+    ctx.strokeStyle = 'rgba(201,168,76,0.07)';
+    ctx.lineWidth = 0.5;
+
+    // Parallels (latitudes)
+    for (let lat = -80; lat <= 80; lat += 20) {
+      ctx.beginPath();
+      let first = true;
+      for (let lon = -180; lon <= 180; lon += 3) {
+        const p = project(lon, lat);
+        if (!isVisible(p.z)) { first = true; continue; }
+        if (first) { ctx.moveTo(p.x, p.y); first = false; }
+        else ctx.lineTo(p.x, p.y);
+      }
+      ctx.stroke();
+    }
+
+    // Meridians (longitudes)
+    for (let lon = -180; lon < 180; lon += 20) {
+      ctx.beginPath();
+      let first = true;
+      for (let lat = -90; lat <= 90; lat += 3) {
+        const p = project(lon, lat);
+        if (!isVisible(p.z)) { first = true; continue; }
+        if (first) { ctx.moveTo(p.x, p.y); first = false; }
+        else ctx.lineTo(p.x, p.y);
+      }
+      ctx.stroke();
+    }
+
+    // Equator highlight
+    ctx.strokeStyle = 'rgba(201,168,76,0.15)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    let first = true;
+    for (let lon = -180; lon <= 180; lon += 2) {
+      const p = project(lon, 0);
+      if (!isVisible(p.z)) { first = true; continue; }
+      if (first) { ctx.moveTo(p.x, p.y); first = false; }
+      else ctx.lineTo(p.x, p.y);
+    }
+    ctx.stroke();
+
+    // Tropics
+    ctx.strokeStyle = 'rgba(201,168,76,0.07)';
+    ctx.setLineDash([4, 4]);
+    for (const tlat of [23.5, -23.5, 66.5, -66.5]) {
+      ctx.beginPath(); first = true;
+      for (let lon = -180; lon <= 180; lon += 2) {
+        const p = project(lon, tlat);
+        if (!isVisible(p.z)) { first = true; continue; }
+        if (first) { ctx.moveTo(p.x, p.y); first = false; }
+        else ctx.lineTo(p.x, p.y);
+      }
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+
+  /* -- draw land polygons -- */
+  function drawLand(highlighted) {
+    lands.forEach(land => {
+      const pts = land.pts;
+      // Check visibility: use first visible point
+      let anyVisible = false;
+      const projected = pts.map(([lo, la]) => {
+        const p = project(lo, la);
+        if (p.z > -0.1) anyVisible = true;
+        return p;
+      });
+      if (!anyVisible) return;
+
+      ctx.beginPath();
+      let started = false;
+      projected.forEach((p, i) => {
+        if (p.z < 0) {
+          started = false; return;
+        }
+        if (!started) { ctx.moveTo(p.x, p.y); started = true; }
+        else ctx.lineTo(p.x, p.y);
+      });
+      if (!started) return;
+      ctx.closePath();
+
+      // Fill
+      ctx.fillStyle = '#1a4a28';
+      ctx.fill();
+
+      // Border
+      ctx.strokeStyle = 'rgba(201,168,76,0.25)';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+    });
+  }
+
+  /* -- draw highlighted country dots -- */
+  function drawDots() {
+    activeDots.forEach((d, i) => {
+      const p = project(d.lon, d.lat);
+      if (!isVisible(p.z)) return;
+
+      const pulse = 0.5 + 0.5 * Math.sin(t * 3 + i * 1.2);
+      const r = 7 + 5 * pulse;
+
+      // Outer glow
+      const grd = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 2.5);
+      grd.addColorStop(0, activeColor + 'cc');
+      grd.addColorStop(0.4, activeColor + '55');
+      grd.addColorStop(1, activeColor + '00');
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r * 2.5, 0, Math.PI * 2);
+      ctx.fillStyle = grd;
+      ctx.fill();
+
+      // Inner dot
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r * 0.55, 0, Math.PI * 2);
+      ctx.fillStyle = activeColor;
+      ctx.fill();
+
+      // Ring
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.strokeStyle = activeColor + 'aa';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Rank badge
+      ctx.fillStyle = activeColor;
+      ctx.font = 'bold 10px Raleway, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('#' + (i + 1), p.x, p.y - r - 8);
+    });
+  }
+
+  /* -- draw country labels -- */
+  function drawLabels() {
+    ctx.font = '600 8px Raleway, sans-serif';
+    ctx.fillStyle = 'rgba(180,220,190,0.5)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    countryLabels.forEach(([lon, lat, name]) => {
+      const p = project(lon, lat);
+      if (!isVisible(p.z) || p.z < 0.15) return;
+      const alpha = Math.min(1, (p.z - 0.15) * 4);
+      ctx.fillStyle = `rgba(180,220,190,${0.45 * alpha})`;
+      ctx.fillText(name, p.x, p.y);
+    });
+  }
+
+  /* -- sphere highlight -- */
+  function drawHighlight() {
+    const hg = ctx.createRadialGradient(CX - R * 0.35, CY - R * 0.35, R * 0.02, CX, CY, R);
+    hg.addColorStop(0, 'rgba(100,200,120,0.08)');
+    hg.addColorStop(0.5, 'rgba(50,150,70,0.04)');
+    hg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.beginPath(); ctx.arc(CX, CY, R, 0, Math.PI * 2);
+    ctx.fillStyle = hg; ctx.fill();
+
+    // Specular
+    const sg = ctx.createRadialGradient(CX - R * 0.45, CY - R * 0.45, 0, CX - R * 0.35, CY - R * 0.35, R * 0.4);
+    sg.addColorStop(0, 'rgba(255,255,255,0.07)');
+    sg.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.beginPath(); ctx.arc(CX, CY, R, 0, Math.PI * 2);
+    ctx.fillStyle = sg; ctx.fill();
+  }
+
+  /* -- sphere edge rim -- */
+  function drawRim() {
+    ctx.restore(); // end clip
+    const rim = ctx.createRadialGradient(CX, CY, R * 0.85, CX, CY, R);
+    rim.addColorStop(0, 'rgba(201,168,76,0)');
+    rim.addColorStop(0.7, 'rgba(201,168,76,0.06)');
+    rim.addColorStop(1, 'rgba(201,168,76,0.18)');
+    ctx.beginPath(); ctx.arc(CX, CY, R, 0, Math.PI * 2);
+    ctx.fillStyle = rim; ctx.fill();
+
+    ctx.beginPath(); ctx.arc(CX, CY, R, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(201,168,76,0.3)'; ctx.lineWidth = 1.5; ctx.stroke();
+  }
+
+  /* -- main render -- */
+  function render() {
+    ctx.clearRect(0, 0, SIZE, SIZE);
+    drawSphere();
+    drawGrid();
+    drawLand();
+    drawLabels();
+    drawDots();
+    drawHighlight();
+    drawRim();
+  }
+
+  /* -- animation loop -- */
+  function loop() {
+    requestAnimationFrame(loop);
+    t += 0.016;
+    if (!drag) {
+      velX *= 0.96;
+      velY *= 0.96;
+      if (Math.abs(velY) < 0.003) velY = 0.003;
+    }
+    rotX += velX;
+    rotY += velY;
+    rotX = Math.max(-1.2, Math.min(1.2, rotX));
+    render();
+  }
+  loop();
+
+  /* -- drag -- */
+  canvas.addEventListener('mousedown', e => {
+    drag = true;
+    px = e.clientX; py = e.clientY;
+    velX = 0; velY = 0;
+  });
+  window.addEventListener('mousemove', e => {
+    if (!drag) return;
+    velY = (e.clientX - px) * 0.006;
+    velX = (e.clientY - py) * 0.006;
+    px = e.clientX; py = e.clientY;
+  });
+  window.addEventListener('mouseup', () => drag = false);
+
+  canvas.addEventListener('touchstart', e => {
+    drag = true; px = e.touches[0].clientX; py = e.touches[0].clientY;
+  }, {passive:true});
+  canvas.addEventListener('touchmove', e => {
+    if (!drag) return;
+    velY = (e.touches[0].clientX - px) * 0.006;
+    velX = (e.touches[0].clientY - py) * 0.006;
+    px = e.touches[0].clientX; py = e.touches[0].clientY;
+  }, {passive:true});
+  canvas.addEventListener('touchend', () => drag = false);
+
+  /* -- expose highlight -- */
+  window.globeHighlight = function(countries, color) {
+    activeDots = countries;
+    activeColor = color || '#c9a84c';
+  };
+})();
+
+// ======================== GLOBE ANIMAL BUTTONS ========================
+const animalBtns = document.getElementById('animalButtons');
+let activeBtn = null;
+// Only show original 6 in globe (Lion, Tiger, Elephant, Eagle, Bear, Deer, Wolf)
+const globeAnimals = animals.filter(a => globeAnimalData[a.name]);
+globeAnimals.forEach(a => {
+  const btn = document.createElement('button');
+  btn.className = 'animal-btn';
+  const miniSvg = a.svgIllustration.replace('viewBox="0 0 120 120"', 'viewBox="0 0 120 120" width="28" height="28"');
+  btn.innerHTML = `<span class="btn-emoji">${miniSvg}</span>${a.name}`;
+  btn.addEventListener('click', () => {
+    if (activeBtn) activeBtn.classList.remove('active');
+    btn.classList.add('active');
+    activeBtn = btn;
+    const data = globeAnimalData[a.name];
+    if (data && window.globeHighlight) window.globeHighlight(data.countries, data.color);
+    const cardsEl = document.getElementById('countryCards');
+    if (!data) return;
+    cardsEl.innerHTML = data.countries.map((c, i) => `
+      <div class="country-card" style="animation-delay: ${i * 80}ms">
+        <div class="country-card-top">
+          <div class="country-name">${c.flag || ''} ${c.name}</div>
+          <div class="country-rank">#${i + 1}</div>
+        </div>
+        <div class="country-population">Population: ${c.pop}</div>
+        <div class="country-status">${c.status}</div>
+      </div>
+    `).join('');
+  });
+  animalBtns.appendChild(btn);
+});
+
+// ======================== SCROLL ANIMATIONS ========================
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+    }
+  });
+}, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+
+document.querySelectorAll('.scroll-reveal, .timeline-item').forEach(el => observer.observe(el));
+
+// Timeline scroll progress
+function updateTimeline() {
+  const tl = document.getElementById('timeline');
+  const spine = document.getElementById('timelineProgress');
+  const rect = tl.getBoundingClientRect();
+  const scrolled = Math.max(0, Math.min(1, (window.innerHeight - rect.top) / (rect.height + window.innerHeight)));
+  spine.style.height = (scrolled * 100) + '%';
+}
+
+window.addEventListener('scroll', () => {
+  updateTimeline();
+}, { passive: true });
+
+updateTimeline();
+
+// ======================== JUNGLE BACKGROUND CANVAS ========================
+(function() {
+  const canvas = document.getElementById('jungle-bg-canvas');
+  const ctx = canvas.getContext('2d');
+
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    draw();
+  }
+
+  function drawFanPalm(x, y, scale, alpha) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+
+    // trunk
+    ctx.strokeStyle = '#6a4a22';
+    ctx.lineWidth = 10;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(0, 200);
+    ctx.stroke();
+
+    // fan leaves
+    const angles = [-80,-55,-30,-5,20,45,70];
+    angles.forEach((deg, j) => {
+      const rad = (deg * Math.PI) / 180;
+      const len = 110 - Math.abs(deg - (-5)) * 0.5;
+      ctx.strokeStyle = j % 2 === 0 ? '#2a5a18' : '#3a6a22';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(Math.cos(rad) * len, Math.sin(rad) * len - len * 0.1);
+      ctx.stroke();
+
+      // leaf shape
+      ctx.fillStyle = j % 2 === 0 ? '#2a5218' : '#3a6220';
+      ctx.globalAlpha = alpha * 0.7;
+      ctx.save();
+      ctx.translate(Math.cos(rad) * len * 0.5, Math.sin(rad) * len * 0.5 - len * 0.05);
+      ctx.rotate(rad);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, len * 0.45, 14, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    });
+    ctx.restore();
+  }
+
+  function drawMonstera(x, y, scale, alpha) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+    ctx.fillStyle = '#2a5a1a';
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.bezierCurveTo(60, -80, 140, -60, 180, 20);
+    ctx.bezierCurveTo(220, 0, 200, 60, 120, 90);
+    ctx.bezierCurveTo(100, 150, 60, 160, 0, 120);
+    ctx.bezierCurveTo(-20, 80, 0, 0, 0, 0);
+    ctx.fill();
+    // holes
+    ctx.fillStyle = '#0d1a08';
+    ctx.globalAlpha = alpha * 0.8;
+    [[70,40,12,7,-20], [110,20,10,6,-10], [140,40,10,6,10]].forEach(([cx,cy,rx,ry,rot]) => {
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(rot * Math.PI/180);
+      ctx.beginPath(); ctx.ellipse(0,0,rx,ry,0,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+    });
+    ctx.restore();
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const W = canvas.width, H = canvas.height;
+
+    // Fan palms scattered
+    drawFanPalm(W * 0.05, H * 0.1, 0.9, 0.5);
+    drawFanPalm(W * 0.92, H * 0.08, 1.0, 0.45);
+    drawFanPalm(W * 0.28, H * 0.05, 0.75, 0.4);
+    drawFanPalm(W * 0.68, H * 0.03, 0.85, 0.38);
+    drawFanPalm(W * 0.5, H * 0.02, 0.7, 0.3);
+
+    // Monstera leaves
+    drawMonstera(-W * 0.04, H * 0.55, 0.9, 0.4);
+    drawMonstera(W * 0.78, H * 0.45, 0.8, 0.3);
+
+    // Thin trunks
+    [[W*0.42,H*0.1,W*0.41,H*0.9],[W*0.58,H*0.05,W*0.57,H*0.85]].forEach(([x1,y1,x2,y2]) => {
+      ctx.save(); ctx.globalAlpha = 0.25;
+      ctx.strokeStyle = '#6a4a22'; ctx.lineWidth = 10; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+      ctx.restore();
+    });
+
+    // Blue spiky plants right side
+    ctx.save(); ctx.globalAlpha = 0.3;
+    [[W*0.82,H*0.6],[W*0.87,H*0.65]].forEach(([px,py]) => {
+      ctx.translate(0,0);
+      [[-30,-100],[-10,-115],[15,-110],[35,-95],[50,-75]].forEach(([dx,dy]) => {
+        ctx.strokeStyle = '#7ab8c8'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(px,py); ctx.lineTo(px+dx*0.8,py+dy*0.7); ctx.stroke();
+      });
+    });
+    ctx.restore();
+  }
+
+  window.addEventListener('resize', resize);
+  resize();
+})();
+
+console.log('🦁 Wildlife Explorer Loaded — Jungle Edition');
+</script>
+</body>
+</html>
